@@ -6,7 +6,11 @@ import { Checkbox } from "@/src/components/ui/checkbox"
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react"
 import { Button } from "@/src/components/ui/button"
 import { Badge } from "@/src/components/ui/badge"
-import * as d3 from "d3"
+import * as d3 from "d3" // Keep d3 if you use d3.csvParse for local upload data processing, though context handles it now.
+
+// Import useData and the types from your data-context file
+import { useData, Node, Link, NetworkData } from "@/src/components/data-context" // Adjust path if it's in src/contexts/
+
 
 interface Question {
   id: string
@@ -20,7 +24,7 @@ interface Answer {
   id: string
   text: string
   multiplicity?: number
-  reasons: Reason[]
+  reasons: Reason[] // Reasons are not currently populated in your processing, but kept for interface consistency
 }
 
 interface Reason {
@@ -29,6 +33,10 @@ interface Reason {
   multiplicity?: number
 }
 
+// These interfaces are now effectively covered by Node and Link from data-context.
+// You can remove them if you consistently use Node and Link from the context.
+// Leaving them here for now for minimal changes, but ideally consolidate types.
+/*
 interface NodeData {
   id: string
   label: string
@@ -45,118 +53,110 @@ interface EdgeData {
   type: string
   weight: string
 }
+*/
 
 export function QuestionsSection({ onQuestionToggle }) {
   const [questions, setQuestions] = useState<Question[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // isLoading and error now come from the context
+  // const [loading, setLoading] = useState(true)
+  // const [error, setError] = useState<string | null>(null)
 
-  // Load questions data from CSV
-  const loadQuestionsData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  // Use the useData hook to get the shared data state
+  const {
+    nodesData,
+    edgesData,
+    isLoading, // Get isLoading from context
+    error,     // Get error from context
+    refreshData // Use refreshData from context for the refresh button
+  } = useData();
+
+  // Process data from context whenever nodesData or edgesData change
+  const processDataForQuestions = useCallback(() => {
+    // setLoading(true); // No longer needed here, context handles it
+    // setError(null);   // No longer needed here, context handles it
+
+    if (isLoading) {
+      // Data is still loading in the context, so we do nothing here yet.
+      // The loading state of this component will reflect the context's loading.
+      return;
+    }
+
+    if (error) {
+      // An error occurred in the context, so we propagate it.
+      // The error state of this component will reflect the context's error.
+      console.error("Error from DataContext:", error);
+      setQuestions([]); // Clear questions on context error
+      return;
+    }
+
+    // Only process if data is available and not empty
+    if (!nodesData || nodesData.length === 0 || !edgesData || edgesData.length === 0) {
+      // This state means no data is loaded yet or it's empty,
+      // but not necessarily an error if it's the initial 'none' state.
+      setQuestions([]);
+      return;
+    }
 
     try {
-      console.log("Loading questions data from CSV...")
-      const [nodesData, edgesData] = await Promise.all([d3.csv("/data/nodes.csv"), d3.csv("/data/edges.csv")])
+      console.log("Processing questions data from context...")
 
-      console.log("Raw nodes data sample:", nodesData.slice(0, 3))
-      console.log("Raw edges data sample:", edgesData.slice(0, 3))
+      // Ensure that node_multiplicity is parsed as a number from the string received from CSV
+      // The Node and Link interfaces from data-context should already handle this if they are correctly typed,
+      // but let's re-ensure it for safety in this processing step.
+      const processedNodes = nodesData.map(d => ({
+        id: String(d.Id), // Ensure ID is string
+        label: String(d.Label),
+        content: String(d.content),
+        type: String(d.node_type),
+        color: String(d.color || ''), // Default if not present
+        transcript_id: String(d.transcript_id || ''), // Default if not present
+        multiplicity: d.node_multiplicity ? Number.parseInt(String(d.node_multiplicity)) : undefined,
+      })) as Node[]; // Cast to Node for type safety
 
-      if (!nodesData || nodesData.length === 0) {
-        throw new Error("No data found in nodes.csv")
-      }
+      const processedEdges = edgesData.map(d => ({
+        source: String(d.Source),
+        target: String(d.Target),
+        weight: d.edge_multiplicity ? Number.parseInt(String(d.edge_multiplicity)) : undefined, // Parse multiplicity
+        type: String(d.edge_type),
+      })) as Link[]; // Cast to Link for type safety
 
-      if (!edgesData || edgesData.length === 0) {
-        throw new Error("No data found in edges.csv")
-      }
+      console.log("Processed nodes count from context:", processedNodes.length)
+      console.log("Processed edges count from context:", processedEdges.length)
 
-      // Check the actual column names
-      console.log("Nodes CSV columns:", Object.keys(nodesData[0]))
-      console.log("Edges CSV columns:", Object.keys(edgesData[0]))
+      // Filter nodes by type. Using the 'type' property from the processed NodeData.
+      const questionNodes = processedNodes.filter((node) => node.type === "question");
+      const answerNodes = processedNodes.filter((node) => node.type === "answer");
 
-      // Process the CSV data - using the actual column names from the CSV
-      const processedNodes: NodeData[] = nodesData.map((d, index) => {
-        const processed = {
-          id: d.Id,
-          label: d.Label,
-          content: d.content,
-          type: d.node_type,
-          color: "",
-          transcript_id: d.transcript_id,
-          multiplicity: d.node_multiplicity,
-        }
-        
-
-        // Log first few processed items for debugging
-        if (index < 3) {
-          console.log(`Processed node ${index}:`, processed)
-        }
-
-        return processed
-      })
-
-      // Process edges data
-      const processedEdges: EdgeData[] = edgesData.map((d, index) => ({
-        source: d.Source,
-        target: d.Target,
-        weight: d.edge_multiplicity,
-        type: d.edge_type,
-      }))
-
-      console.log("Total processed nodes:", processedNodes.length)
-      console.log("Total processed edges:", processedEdges.length)
-
-      // Check what types we have
-      const typeCount = processedNodes.reduce(
-        (acc, node) => {
-          acc[node.type] = (acc[node.type] || 0) + 1
-          return acc
-        },
-        {} as Record<string, number>,
-      )
-      console.log("Node types found:", typeCount)
-
-      // Extract questions and their answers
-      const questionNodes = processedNodes.filter((node) => node.type === "question")
-      const answerNodes = processedNodes.filter((node) => node.type === "answer")
-
-      console.log("Question nodes found:", questionNodes.length)
-      console.log("Answer nodes found:", answerNodes.length)
-
-      if (questionNodes.length > 0) {
-        console.log("Sample question nodes:", questionNodes.slice(0, 3))
-      }
+      console.log("Question nodes from context:", questionNodes.length);
+      console.log("Answer nodes from context:", answerNodes.length);
 
       if (questionNodes.length === 0) {
-        // Let's see what we actually have
-        console.log("All unique types in data:", [...new Set(processedNodes.map((n) => n.type))])
-        console.log("Sample nodes:", processedNodes.slice(0, 5))
-        throw new Error(`No question nodes found in the data. Found types: ${Object.keys(typeCount).join(", ")}`)
+        console.warn("No question nodes found in the processed data.");
+        setQuestions([]); // Set to empty if no questions
+        return;
       }
 
       // Build question-answer relationships using edges
-      const questionsWithAnswers: Question[] = questionNodes.map((questionNode, index) => {
-        // Find edges where this question is the source and target is an answer
+      const questionsWithAnswers: Question[] = questionNodes.map((questionNode) => {
         const questionToAnswerEdges = processedEdges.filter(
-          (edge) => edge.source === questionNode.id && edge.type === "question_to_answer",
+          (edge) => String(edge.source) === String(questionNode.id) && String(edge.type) === "question_to_answer",
         )
 
-        // Get the answer nodes connected to this question
         const relatedAnswers: Answer[] = questionToAnswerEdges
           .map((edge) => {
-            const answerNode = answerNodes.find((node) => node.id === edge.target)
+            const answerNode = answerNodes.find((node) => String(node.id) === String(edge.target));
             if (answerNode) {
               return {
                 id: answerNode.id,
                 text: answerNode.content,
-                multiplicity: answerNode.multiplicity ? Number.parseInt(answerNode.multiplicity) : undefined,
-              }
+                multiplicity: answerNode.multiplicity, // This should already be a number from your Node interface
+                reasons: [],
+              };
             }
-            return null
+            return null;
           })
-          .filter((answer) => answer !== null)
-          .sort((a, b) => (b.multiplicity || 0) - (a.multiplicity || 0)) // Sort by multiplicity descending
+          .filter((answer) => answer !== null) // <--- REMOVE 'as Answer[]' FROM HERE
+          .sort((a, b) => (b.multiplicity || 0) - (a.multiplicity || 0));
 
         return {
           id: questionNode.id,
@@ -165,37 +165,38 @@ export function QuestionsSection({ onQuestionToggle }) {
           answers: relatedAnswers,
           expanded: false,
         }
-      })
+      });
 
-      console.log("Final questions with answers:", questionsWithAnswers.length)
-      console.log("Sample question with answers:", questionsWithAnswers[0])
+      console.log("Final questions with answers (from context):", questionsWithAnswers.length)
+      if (questionsWithAnswers.length > 0) {
+        console.log("Sample question with answers (from context):", questionsWithAnswers[0])
+      }
 
-      setQuestions(questionsWithAnswers)
+      setQuestions(questionsWithAnswers);
 
       // Notify parent of initial selection (empty array)
       if (onQuestionToggle) {
         const selectedQuestionIds = questionsWithAnswers.filter((q) => q.selected).map((q) => q.id)
-        console.log("Notifying parent with selected questions:", selectedQuestionIds)
+        console.log("Notifying parent with initial selected questions (from context):", selectedQuestionIds)
         onQuestionToggle(selectedQuestionIds)
       }
-    } catch (err) {
-      console.error("Error loading questions data:", err)
-      setError(`Failed to load questions data: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [onQuestionToggle])
 
-  // Load data on component mount
+    } catch (err) {
+      console.error("Error processing questions data from context:", err)
+      // setError(`Failed to process questions data: ${err.message}`) // Context error already handled
+      setQuestions([]);
+    } // finally is not needed here as isLoading is handled by context
+  }, [nodesData, edgesData, isLoading, error, onQuestionToggle]); // Re-run when context data or states change
+
+  // Trigger data processing when context data changes
   useEffect(() => {
-    loadQuestionsData()
-  }, [loadQuestionsData])
+    processDataForQuestions();
+  }, [processDataForQuestions]);
 
   const toggleQuestion = (id: string) => {
     const updatedQuestions = questions.map((q) => (q.id === id ? { ...q, selected: !q.selected } : q))
     setQuestions(updatedQuestions)
 
-    // Call the parent callback with the updated selected question IDs
     if (onQuestionToggle) {
       const selectedQuestionIds = updatedQuestions.filter((q) => q.selected).map((q) => q.id)
       console.log("Question toggled, notifying parent with:", selectedQuestionIds)
@@ -235,7 +236,8 @@ export function QuestionsSection({ onQuestionToggle }) {
     return "bg-gray-100 text-gray-800 border-gray-200"
   }
 
-  if (loading) {
+  // Use isLoading and error from the context
+  if (isLoading) {
     return (
       <Card className="h-full flex flex-col overflow-hidden">
         <CardHeader className="flex-shrink-0">
@@ -251,6 +253,7 @@ export function QuestionsSection({ onQuestionToggle }) {
     )
   }
 
+  // Use error from the context
   if (error) {
     return (
       <Card className="h-full flex flex-col overflow-hidden">
@@ -261,7 +264,7 @@ export function QuestionsSection({ onQuestionToggle }) {
           <div className="text-center text-red-600 max-w-md">
             <p className="text-sm font-medium mb-2">Error Loading Questions</p>
             <p className="text-xs mb-4">{error}</p>
-            <Button size="sm" onClick={loadQuestionsData}>
+            <Button size="sm" onClick={refreshData}> {/* Use refreshData from context */}
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
@@ -290,7 +293,7 @@ export function QuestionsSection({ onQuestionToggle }) {
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0"
-            onClick={loadQuestionsData}
+            onClick={refreshData} // Use refreshData from context
             title="Refresh Questions"
           >
             <RefreshCw className="h-4 w-4" />
