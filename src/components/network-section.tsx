@@ -33,7 +33,7 @@ import { useData, Node, Link, NetworkData  } from "@/src/components/data-context
 // }
 
 
-type LayoutType = "force" | "circular" | "hierarchical" | "grid"
+type LayoutType = "force" | "circular" | "hierarchical" | "grid" //| "tree"
 
 // Helper function for default colors based on node type
 function getDefaultColor(nodeType: string): string {
@@ -268,7 +268,7 @@ const getFilteredNetworkData = useCallback(() => {
       // respecting the 'showTranscriptLinks' toggle.
       const allLinks = showTranscriptLinks
       ? networkData.links
-      : networkData.links.filter(link =>
+      : networkData.links.filter((link: any) =>
       link.type !== "same_transcript_answer" && link.type !== "same_transcript_reason"
       );
       return { nodes: networkData.nodes, links: allLinks };
@@ -276,9 +276,9 @@ const getFilteredNetworkData = useCallback(() => {
 
   let connectedNodeIds = new Set<string>();
   let relevantLinks: Link[] = [];
+  let questionAnswerMap = new Map<string, Set<string>>(); // Track which answers belong to which questions
 
-  // --- Phase 1: Build the core subgraph based *only* on selected questions and their direct answers/reasons ---
-  // This phase ensures constraint #1: only selected questions and their direct hierarchy are initially included.
+  // --- Phase 1: Build the core subgraph based on selected questions and their direct answers ---
   let initialChanged = true;
   while (initialChanged) {
       initialChanged = false;
@@ -292,34 +292,28 @@ const getFilteredNetworkData = useCallback(() => {
       }
       });
 
-      // Iterate over links to find Q->A and A->R connections from currently connected nodes
-      networkData.links.forEach(link => {
+      // Iterate over links to find Q->A connections from currently connected questions
+      networkData.links.forEach((link: any) => {
       const sourceId = typeof link.source === "string" ? link.source : link.source.id;
       const targetId = typeof link.target === "string" ? link.target : link.target.id;
 
-      // Only consider "question_to_answer" and "answer_to_reason" links for this phase
-      if (link.type === "question_to_answer" || link.type === "answer_to_reason") {
-      // If the source is connected, and the target is not, add the target and the link
+      // Only consider "question_to_answer" links for this phase
+      if (link.type === "question_to_answer") {
+      // If the source (question) is connected, and the target (answer) is not, add the target and the link
       if (connectedNodeIds.has(sourceId) && !connectedNodeIds.has(targetId)) {
       connectedNodeIds.add(targetId);
       if (!relevantLinks.includes(link)) {
         relevantLinks.push(link);
       }
+      
+      // Track which answers belong to which questions
+      if (!questionAnswerMap.has(sourceId)) {
+        questionAnswerMap.set(sourceId, new Set());
+      }
+      questionAnswerMap.get(sourceId)!.add(targetId);
+      
       initialChanged = true;
       }
-      // REMOVED the else if block that caused reverse traversal from reason to answer
-      /*
-      else if (connectedNodeIds.has(targetId) && !connectedNodeIds.has(sourceId) && networkData.nodes.find(n => n.id === targetId)?.type === "reason" ) {
-        const sourceNode = networkData.nodes.find(n => n.id === sourceId);
-        if (sourceNode && sourceNode.type === "answer") {
-           connectedNodeIds.add(sourceId);
-           if (!relevantLinks.includes(link)) {
-             relevantLinks.push(link);
-           }
-           initialChanged = true;
-        }
-      }
-      */
       // If both source and target are already connected, ensure the link is added
       else if (connectedNodeIds.has(sourceId) && connectedNodeIds.has(targetId)) {
       if (!relevantLinks.includes(link)) {
@@ -335,12 +329,37 @@ const getFilteredNetworkData = useCallback(() => {
       }
   }
 
-  // --- Phase 2: Conditionally add "same_transcript" links *only* between *already connected* nodes ---
+  // --- Phase 2: Add reasons ONLY for answers that belong to selected questions ---
+  networkData.links.forEach((link: any) => {
+    const sourceId = typeof link.source === "string" ? link.source : link.source.id;
+    const targetId = typeof link.target === "string" ? link.target : link.target.id;
+
+    if (link.type === "answer_to_reason") {
+      // Only add reason if the source (answer) belongs to one of our selected questions
+      const answerBelongsToSelectedQuestion = Array.from(questionAnswerMap.values())
+        .some(answerSet => answerSet.has(sourceId));
+      
+      if (answerBelongsToSelectedQuestion && !connectedNodeIds.has(targetId)) {
+        connectedNodeIds.add(targetId);
+        if (!relevantLinks.includes(link)) {
+          relevantLinks.push(link);
+        }
+      }
+      // If both source and target are already connected, ensure the link is added
+      else if (connectedNodeIds.has(sourceId) && connectedNodeIds.has(targetId)) {
+        if (!relevantLinks.includes(link)) {
+          relevantLinks.push(link);
+        }
+      }
+    }
+  });
+
+  // --- Phase 3: Conditionally add "same_transcript" links *only* between *already connected* nodes ---
   // This phase ensures constraint #2: same_transcript links act as bridges only.
   if (showTranscriptLinks) {
       // Iterate over relevant links to find if any 'same_transcript' connections exist
       // between the nodes we've already identified as 'connectedNodeIds'.
-      networkData.links.forEach(link => {
+      networkData.links.forEach((link: any) => {
       const sourceId = typeof link.source === "string" ? link.source : link.source.id;
       const targetId = typeof link.target === "string" ? link.target : link.target.id;
 
@@ -360,11 +379,11 @@ const getFilteredNetworkData = useCallback(() => {
   }
 
   // Final filtering based on the accumulated connectedNodeIds and relevantLinks
-  const filteredNodes = networkData.nodes.filter((node) =>
+  const filteredNodes = networkData.nodes.filter((node: any) =>
       connectedNodeIds.has(node.id)
   );
 
-  const finalFilteredLinks = relevantLinks.filter((link) => {
+  const finalFilteredLinks = relevantLinks.filter((link: any) => {
       const sourceId = typeof link.source === "string" ? link.source : link.source.id;
       const targetId = typeof link.target === "string" ? link.target : link.target.id;
       // Ensure both source and target are in our final set of connected nodes
@@ -373,6 +392,9 @@ const getFilteredNetworkData = useCallback(() => {
 
   console.log("Filtered nodes (final):", filteredNodes.length);
   console.log("Filtered links (final):", finalFilteredLinks.length);
+  console.log("Question-Answer mapping:", Object.fromEntries(
+    Array.from(questionAnswerMap.entries()).map(([q, answers]) => [q, Array.from(answers)])
+  ));
 
   console.log("Filtered links by type (final):");
   const linkTypeCounts = finalFilteredLinks.reduce((acc, link) => {
@@ -549,6 +571,14 @@ const getFilteredNetworkData = useCallback(() => {
           node.fy = null
         })
         break
+
+      // case "tree":
+
+      //   nodes.forEach((node, i) => {
+      //     node.fx = null
+      //     node.fy = null
+      //   })
+      //   break
     }
   }, [])
 
@@ -703,7 +733,7 @@ const getFilteredNetworkData = useCallback(() => {
 
       // --- Update Attributes for Labels within Node Groups ---
       node.select(".node-label") // Select the text within each node group
-          .text((d) => (d.label && d.label.length > 20 ? d.label.substring(0, 20) + "..." : d.label || d.id))
+          .text((d) => (d.content && d.content.length > 100 ? d.content.substring(0, 100) + "..." : d.content || d.id))
           .attr("font-size", (d) => {
               if (d.type === "question") return "11px";
               if (d.type === "answer") return "9px";
@@ -832,6 +862,12 @@ const getFilteredNetworkData = useCallback(() => {
               <DropdownMenuItem onClick={() => setLayout("grid")} className={layout === "grid" ? "bg-accent" : ""}>
                 Grid
               </DropdownMenuItem>
+              {/* <DropdownMenuItem
+                onClick={() => setLayout("tree")}
+                className={layout === "tree" ? "bg-accent" : ""}
+              >
+                tree
+              </DropdownMenuItem>*/}
                 <DropdownMenuSeparator />
                  <DropdownMenuLabel>Link Options</DropdownMenuLabel>
                  <DropdownMenuItem onClick={() => setShowTranscriptLinks(prev => !prev)} className="flex justify-between items-center">

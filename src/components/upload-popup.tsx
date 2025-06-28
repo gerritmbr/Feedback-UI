@@ -1,16 +1,23 @@
 import React, { useState, useRef } from 'react';
+import * as d3 from 'd3';
 
-const UploadPopup = ({ isOpen, onClose, onDataUploaded }) => {
-  const [nodesFile, setNodesFile] = useState(null);
-  const [edgesFile, setEdgesFile] = useState(null);
+interface UploadPopupProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onDataUploaded: () => void;
+}
+
+const UploadPopup = ({ isOpen, onClose, onDataUploaded }: UploadPopupProps) => {
+  const [nodesFile, setNodesFile] = useState<File | null>(null);
+  const [edgesFile, setEdgesFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   
-  const nodesInputRef = useRef(null);
-  const edgesInputRef = useRef(null);
+  const nodesInputRef = useRef<HTMLInputElement>(null);
+  const edgesInputRef = useRef<HTMLInputElement>(null);
 
-  const handleNodesFileChange = (e) => {
-    const file = e.target.files[0];
+  const handleNodesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (file && file.type === 'text/csv') {
       setNodesFile(file);
       setError('');
@@ -20,8 +27,8 @@ const UploadPopup = ({ isOpen, onClose, onDataUploaded }) => {
     }
   };
 
-  const handleEdgesFileChange = (e) => {
-    const file = e.target.files[0];
+  const handleEdgesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (file && file.type === 'text/csv') {
       setEdgesFile(file);
       setError('');
@@ -45,6 +52,18 @@ const UploadPopup = ({ isOpen, onClose, onDataUploaded }) => {
       const nodesText = await readFileAsText(nodesFile);
       const edgesText = await readFileAsText(edgesFile);
 
+      // Debug: Check what's being uploaded
+      console.log("Uploading nodes file:", nodesFile.name);
+      console.log("Uploading edges file:", edgesFile.name);
+      
+      // Parse to check columns
+      const parsedNodes = d3.csvParse(nodesText);
+      const parsedEdges = d3.csvParse(edgesText);
+      
+      console.log("Uploaded nodes CSV columns:", Object.keys(parsedNodes[0] || {}));
+      console.log("Sample uploaded node:", parsedNodes[0]);
+      console.log("Uploaded edges CSV columns:", Object.keys(parsedEdges[0] || {}));
+
       // Store in localStorage
       localStorage.setItem('csv_nodes_data', nodesText);
       localStorage.setItem('csv_edges_data', edgesText);
@@ -57,16 +76,16 @@ const UploadPopup = ({ isOpen, onClose, onDataUploaded }) => {
       onClose();
       
     } catch (err) {
-      setError('Error processing files: ' + err.message);
+      setError('Error processing files: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
     }
   };
 
-  const readFileAsText = (file) => {
+  const readFileAsText = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
+      reader.onload = (e) => resolve(e.target?.result as string);
       reader.onerror = (e) => reject(new Error('Error reading file'));
       reader.readAsText(file);
     });

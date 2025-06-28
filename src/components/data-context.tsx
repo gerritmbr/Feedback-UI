@@ -5,7 +5,7 @@ import * as d3 from 'd3'; // Make sure d3 is imported here
 
 // Define the Node and Link interfaces if they are specifically tied to the data loading/processing logic
 // Otherwise, they might live in a separate types file or directly in network-section.tsx
-interface Node extends d3.SimulationNodeDatum {
+export interface Node extends d3.SimulationNodeDatum {
   id: string
   label: string
   content: string
@@ -13,20 +13,21 @@ interface Node extends d3.SimulationNodeDatum {
   color: string
   transcript_id: string
   multiplicity?: number
+  content_category?: string
 }
 
-interface Link extends d3.SimulationLinkDatum<Node> {
+export interface Link extends d3.SimulationLinkDatum<Node> {
   source: string | Node
   target: string | Node
   transcript_id?: string
   type?: "question_to_answer" | "answer_to_reason" | "same_transcript_answer" | "same_transcript_reason"
+  weight?: number
 }
 
-interface NetworkData {
+export interface NetworkData {
   nodes: Node[]
   links: Link[]
 }
-
 
 // Data Loading of CSV
 interface DataContextType {
@@ -66,15 +67,29 @@ const loadCSVData = async () => {
   const edgesData = localStorage.getItem('csv_edges_data');
 
   if (nodesData && edgesData) {
+    console.log("Loading data from localStorage (uploaded files)");
     const parsedNodes = d3.csvParse(nodesData);
     const parsedEdges = d3.csvParse(edgesData);
+    
+    // Debug: Check what columns are available in uploaded data
+    console.log("Uploaded nodes CSV columns:", Object.keys(parsedNodes[0] || {}));
+    console.log("Sample uploaded node:", parsedNodes[0]);
+    console.log("Uploaded edges CSV columns:", Object.keys(parsedEdges[0] || {}));
+    
     return [parsedNodes, parsedEdges];
   } else {
+    console.log("Loading data from server files");
     // Make sure these paths are correct relative to your public directory
     const [serverNodes, serverEdges] = await Promise.all([
       d3.csv("/data/nodes.csv"),
       d3.csv("/data/edges.csv")
     ]);
+    
+    // Debug: Check what columns are available in server data
+    console.log("Server nodes CSV columns:", Object.keys(serverNodes[0] || {}));
+    console.log("Sample server node:", serverNodes[0]);
+    console.log("Server edges CSV columns:", Object.keys(serverEdges[0] || {}));
+    
     return [serverNodes, serverEdges];
   }
 };

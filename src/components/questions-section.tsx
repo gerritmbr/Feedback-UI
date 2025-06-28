@@ -6,11 +6,9 @@ import { Checkbox } from "@/src/components/ui/checkbox"
 import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react"
 import { Button } from "@/src/components/ui/button"
 import { Badge } from "@/src/components/ui/badge"
-import * as d3 from "d3" // Keep d3 if you use d3.csvParse for local upload data processing, though context handles it now.
 
-// Import useData and the types from your data-context file
-import { useData, Node, Link, NetworkData } from "@/src/components/data-context" // Adjust path if it's in src/contexts/
-
+// Import useData and types from your data-context file
+import { useData, Node, Link } from "@/src/components/data-context"
 
 interface Question {
   id: string
@@ -18,13 +16,14 @@ interface Question {
   selected: boolean
   answers: Answer[]
   expanded: boolean
+  category: string
 }
 
 interface Answer {
   id: string
   text: string
   multiplicity?: number
-  reasons: Reason[] // Reasons are not currently populated in your processing, but kept for interface consistency
+  reasons: Reason[]
 }
 
 interface Reason {
@@ -33,67 +32,47 @@ interface Reason {
   multiplicity?: number
 }
 
-// These interfaces are now effectively covered by Node and Link from data-context.
-// You can remove them if you consistently use Node and Link from the context.
-// Leaving them here for now for minimal changes, but ideally consolidate types.
-/*
-interface NodeData {
-  id: string
-  label: string
-  content: string
-  type: string
-  color: string
-  transcript_id: string
-  multiplicity: string
+interface CategoryGroup {
+  name: string
+  questions: Question[]
+  selected: boolean
+  expanded: boolean
 }
 
-interface EdgeData {
-  source: string
-  target: string
-  type: string
-  weight: string
+interface QuestionsSectionProps {
+  onQuestionToggle: (selectedQuestionIds: string[]) => void
 }
-*/
 
-export function QuestionsSection({ onQuestionToggle }) {
+export function QuestionsSection({ onQuestionToggle }: QuestionsSectionProps) {
   const [questions, setQuestions] = useState<Question[]>([])
-  // isLoading and error now come from the context
-  // const [loading, setLoading] = useState(true)
-  // const [error, setError] = useState<string | null>(null)
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
 
   // Use the useData hook to get the shared data state
   const {
     nodesData,
     edgesData,
-    isLoading, // Get isLoading from context
-    error,     // Get error from context
-    refreshData // Use refreshData from context for the refresh button
+    isLoading,
+    error,
+    refreshData
   } = useData();
 
   // Process data from context whenever nodesData or edgesData change
   const processDataForQuestions = useCallback(() => {
-    // setLoading(true); // No longer needed here, context handles it
-    // setError(null);   // No longer needed here, context handles it
-
     if (isLoading) {
-      // Data is still loading in the context, so we do nothing here yet.
-      // The loading state of this component will reflect the context's loading.
       return;
     }
 
     if (error) {
-      // An error occurred in the context, so we propagate it.
-      // The error state of this component will reflect the context's error.
       console.error("Error from DataContext:", error);
-      setQuestions([]); // Clear questions on context error
+      setQuestions([]);
+      setCategoryGroups([]);
       return;
     }
 
     // Only process if data is available and not empty
     if (!nodesData || nodesData.length === 0 || !edgesData || edgesData.length === 0) {
-      // This state means no data is loaded yet or it's empty,
-      // but not necessarily an error if it's the initial 'none' state.
       setQuestions([]);
+      setCategoryGroups([]);
       return;
     }
 
@@ -101,29 +80,33 @@ export function QuestionsSection({ onQuestionToggle }) {
       console.log("Processing questions data from context...")
 
       // Ensure that node_multiplicity is parsed as a number from the string received from CSV
-      // The Node and Link interfaces from data-context should already handle this if they are correctly typed,
-      // but let's re-ensure it for safety in this processing step.
       const processedNodes = nodesData.map(d => ({
-        id: String(d.Id), // Ensure ID is string
+        id: String(d.Id),
         label: String(d.Label),
         content: String(d.content),
         type: String(d.node_type),
-        color: String(d.color || ''), // Default if not present
-        transcript_id: String(d.transcript_id || ''), // Default if not present
+        color: String(d.color || ''),
+        transcript_id: String(d.transcript_id || ''),
         multiplicity: d.node_multiplicity ? Number.parseInt(String(d.node_multiplicity)) : undefined,
-      })) as Node[]; // Cast to Node for type safety
+        content_category: String(d.content_category || ''),
+      })) as Node[];
+
+      console.log("Sample processed node:", processedNodes[0]);
+      console.log("Available fields in first node:", Object.keys(nodesData[0] || {}));
+      console.log("Raw content_category value:", nodesData[0]?.content_category);
+      console.log("All available fields in CSV:", Object.keys(nodesData[0] || {}));
 
       const processedEdges = edgesData.map(d => ({
         source: String(d.Source),
         target: String(d.Target),
-        weight: d.edge_multiplicity ? Number.parseInt(String(d.edge_multiplicity)) : undefined, // Parse multiplicity
+        weight: d.edge_multiplicity ? Number.parseInt(String(d.edge_multiplicity)) : undefined,
         type: String(d.edge_type),
-      })) as Link[]; // Cast to Link for type safety
+      })) as Link[];
 
       console.log("Processed nodes count from context:", processedNodes.length)
       console.log("Processed edges count from context:", processedEdges.length)
 
-      // Filter nodes by type. Using the 'type' property from the processed NodeData.
+      // Filter nodes by type
       const questionNodes = processedNodes.filter((node) => node.type === "question");
       const answerNodes = processedNodes.filter((node) => node.type === "answer");
 
@@ -132,7 +115,8 @@ export function QuestionsSection({ onQuestionToggle }) {
 
       if (questionNodes.length === 0) {
         console.warn("No question nodes found in the processed data.");
-        setQuestions([]); // Set to empty if no questions
+        setQuestions([]);
+        setCategoryGroups([]);
         return;
       }
 
@@ -149,30 +133,36 @@ export function QuestionsSection({ onQuestionToggle }) {
               return {
                 id: answerNode.id,
                 text: answerNode.content,
-                multiplicity: answerNode.multiplicity, // This should already be a number from your Node interface
+                multiplicity: edge.weight,
                 reasons: [],
               };
             }
             return null;
           })
-          .filter((answer) => answer !== null) // <--- REMOVE 'as Answer[]' FROM HERE
+          .filter((answer) => answer !== null)
           .sort((a, b) => (b.multiplicity || 0) - (a.multiplicity || 0));
 
         return {
           id: questionNode.id,
           text: questionNode.content,
-          selected: false, // Default to not selected
+          selected: false,
           answers: relatedAnswers,
           expanded: false,
+          category: questionNode.content_category || 'Uncategorized'
         }
       });
 
       console.log("Final questions with answers (from context):", questionsWithAnswers.length)
       if (questionsWithAnswers.length > 0) {
         console.log("Sample question with answers (from context):", questionsWithAnswers[0])
+        console.log("Categories found:", [...new Set(questionsWithAnswers.map(q => q.category))]);
       }
 
       setQuestions(questionsWithAnswers);
+
+      // Group questions by category
+      const groupedByCategory = groupQuestionsByCategory(questionsWithAnswers);
+      setCategoryGroups(groupedByCategory);
 
       // Notify parent of initial selection (empty array)
       if (onQuestionToggle) {
@@ -183,10 +173,30 @@ export function QuestionsSection({ onQuestionToggle }) {
 
     } catch (err) {
       console.error("Error processing questions data from context:", err)
-      // setError(`Failed to process questions data: ${err.message}`) // Context error already handled
       setQuestions([]);
-    } // finally is not needed here as isLoading is handled by context
-  }, [nodesData, edgesData, isLoading, error, onQuestionToggle]); // Re-run when context data or states change
+      setCategoryGroups([]);
+    }
+  }, [nodesData, edgesData, isLoading, error, onQuestionToggle]);
+
+  // Group questions by category
+  const groupQuestionsByCategory = (questions: Question[]): CategoryGroup[] => {
+    const categoryMap = new Map<string, Question[]>();
+    
+    questions.forEach(question => {
+      const category = question.category;
+      if (!categoryMap.has(category)) {
+        categoryMap.set(category, []);
+      }
+      categoryMap.get(category)!.push(question);
+    });
+
+    return Array.from(categoryMap.entries()).map(([name, questions]) => ({
+      name,
+      questions,
+      selected: false,
+      expanded: true
+    }));
+  };
 
   // Trigger data processing when context data changes
   useEffect(() => {
@@ -197,6 +207,13 @@ export function QuestionsSection({ onQuestionToggle }) {
     const updatedQuestions = questions.map((q) => (q.id === id ? { ...q, selected: !q.selected } : q))
     setQuestions(updatedQuestions)
 
+    // Update category groups to keep them in sync
+    const updatedGroups = categoryGroups.map(group => ({
+      ...group,
+      questions: group.questions.map(q => q.id === id ? { ...q, selected: !q.selected } : q)
+    }));
+    setCategoryGroups(updatedGroups);
+
     if (onQuestionToggle) {
       const selectedQuestionIds = updatedQuestions.filter((q) => q.selected).map((q) => q.id)
       console.log("Question toggled, notifying parent with:", selectedQuestionIds)
@@ -204,13 +221,56 @@ export function QuestionsSection({ onQuestionToggle }) {
     }
   }
 
+  const toggleCategory = (categoryName: string) => {
+    const updatedGroups = categoryGroups.map(group => {
+      if (group.name === categoryName) {
+        const newSelected = !group.selected;
+        const updatedQuestions = group.questions.map(q => ({ ...q, selected: newSelected }));
+        return { ...group, selected: newSelected, questions: updatedQuestions };
+      }
+      return group;
+    });
+    setCategoryGroups(updatedGroups);
+
+    // Update questions state to keep them in sync
+    const updatedQuestions = questions.map(q => {
+      const group = updatedGroups.find(g => g.questions.some(gq => gq.id === q.id));
+      return group ? { ...q, selected: group.selected } : q;
+    });
+    setQuestions(updatedQuestions);
+
+    if (onQuestionToggle) {
+      const selectedQuestionIds = updatedQuestions.filter((q) => q.selected).map((q) => q.id)
+      onQuestionToggle(selectedQuestionIds)
+    }
+  }
+
+  const toggleCategoryExpanded = (categoryName: string) => {
+    setCategoryGroups(prev => prev.map(group => 
+      group.name === categoryName ? { ...group, expanded: !group.expanded } : group
+    ));
+  }
+
   const toggleExpanded = (id: string) => {
+    // Update both questions state and categoryGroups state to keep them in sync
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, expanded: !q.expanded } : q)))
+    
+    setCategoryGroups(prev => prev.map(group => ({
+      ...group,
+      questions: group.questions.map(q => q.id === id ? { ...q, expanded: !q.expanded } : q)
+    })));
   }
 
   const selectAll = () => {
     const updatedQuestions = questions.map((q) => ({ ...q, selected: true }))
     setQuestions(updatedQuestions)
+
+    const updatedGroups = categoryGroups.map(group => ({
+      ...group,
+      selected: true,
+      questions: group.questions.map(q => ({ ...q, selected: true }))
+    }));
+    setCategoryGroups(updatedGroups);
 
     if (onQuestionToggle) {
       const selectedQuestionIds = updatedQuestions.map((q) => q.id)
@@ -221,6 +281,13 @@ export function QuestionsSection({ onQuestionToggle }) {
   const selectNone = () => {
     const updatedQuestions = questions.map((q) => ({ ...q, selected: false }))
     setQuestions(updatedQuestions)
+
+    const updatedGroups = categoryGroups.map(group => ({
+      ...group,
+      selected: false,
+      questions: group.questions.map(q => ({ ...q, selected: false }))
+    }));
+    setCategoryGroups(updatedGroups);
 
     if (onQuestionToggle) {
       onQuestionToggle([])
@@ -264,7 +331,7 @@ export function QuestionsSection({ onQuestionToggle }) {
           <div className="text-center text-red-600 max-w-md">
             <p className="text-sm font-medium mb-2">Error Loading Questions</p>
             <p className="text-xs mb-4">{error}</p>
-            <Button size="sm" onClick={refreshData}> {/* Use refreshData from context */}
+            <Button size="sm" onClick={refreshData}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
@@ -293,7 +360,7 @@ export function QuestionsSection({ onQuestionToggle }) {
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0"
-            onClick={refreshData} // Use refreshData from context
+            onClick={refreshData}
             title="Refresh Questions"
           >
             <RefreshCw className="h-4 w-4" />
@@ -301,85 +368,124 @@ export function QuestionsSection({ onQuestionToggle }) {
         </div>
       </CardHeader>
       <CardContent className="flex-1 p-4 overflow-y-auto">
-        {questions.length === 0 ? (
+        {categoryGroups.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             <p className="text-sm">No questions found</p>
           </div>
         ) : (
           <div className="h-full overflow-y-auto space-y-4">
-            {questions.map((question, index) => {
-              // Calculate max multiplicity for this question's answers for color coding
-              const maxMultiplicity = Math.max(...question.answers.map((a) => a.multiplicity || 0))
-
-              return (
-                <div key={question.id} className="border rounded-lg p-4 bg-gray-50 flex-shrink-0">
-                  <div className="flex items-start space-x-3">
+            {categoryGroups.map((categoryGroup) => (
+              <div key={categoryGroup.name} className="border rounded-lg bg-white">
+                {/* Category Header */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 border-b">
+                  <div className="flex items-center space-x-3">
                     <Checkbox
-                      id={question.id}
-                      checked={question.selected}
-                      onCheckedChange={() => toggleQuestion(question.id)}
-                      className="mt-1 flex-shrink-0"
+                      id={`category-${categoryGroup.name}`}
+                      checked={categoryGroup.selected}
+                      onCheckedChange={() => toggleCategory(categoryGroup.name)}
+                      className="flex-shrink-0"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <label
-                          htmlFor={question.id}
-                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors pr-2"
-                        >
-                          {question.text}
-                        </label>
-                        {question.answers.length > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleExpanded(question.id)}
-                            className="h-6 w-6 p-0 flex-shrink-0"
-                          >
-                            {question.expanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                      {question.expanded && question.answers.length > 0 && (
-                        <div className="mt-3 pl-2 border-l-2 border-gray-200">
-                          <div className="space-y-2">
-                            {question.answers.map((answer, answerIndex) => (
-                              <div key={answerIndex} className="flex items-center justify-between py-1">
-                                <span className="text-xs text-gray-600 flex-1">• {answer.text}</span>
-                                {answer.multiplicity !== undefined && (
-                                  <Badge
-                                    variant="outline"
-                                    className={`ml-2 text-xs px-2 py-0 ${getMultiplicityColor(
-                                      answer.multiplicity,
-                                      maxMultiplicity,
-                                    )}`}
+                    <label
+                      htmlFor={`category-${categoryGroup.name}`}
+                      className="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
+                    >
+                      {categoryGroup.name} ({categoryGroup.questions.length})
+                    </label>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleCategoryExpanded(categoryGroup.name)}
+                    className="h-6 w-6 p-0 flex-shrink-0"
+                  >
+                    {categoryGroup.expanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Questions in Category */}
+                {categoryGroup.expanded && (
+                  <div className="p-3 space-y-3">
+                    {categoryGroup.questions.map((question) => {
+                      // Calculate max multiplicity for this question's answers for color coding
+                      const maxMultiplicity = Math.max(...question.answers.map((a) => a.multiplicity || 0))
+
+                      return (
+                        <div key={question.id} className="border rounded-lg p-4 bg-gray-50 flex-shrink-0">
+                          <div className="flex items-start space-x-3">
+                            <Checkbox
+                              id={question.id}
+                              checked={question.selected}
+                              onCheckedChange={() => toggleQuestion(question.id)}
+                              className="mt-1 flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <label
+                                  htmlFor={question.id}
+                                  className="text-sm font-medium cursor-pointer hover:text-primary transition-colors pr-2"
+                                >
+                                  {question.text}
+                                </label>
+                                {question.answers.length > 0 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleExpanded(question.id)}
+                                    className="h-6 w-6 p-0 flex-shrink-0"
                                   >
-                                    {answer.multiplicity}
-                                  </Badge>
+                                    {question.expanded ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
                                 )}
                               </div>
-                            ))}
-                          </div>
-                          {question.answers.length > 0 && question.answers[0].multiplicity !== undefined && (
-                            <div className="mt-2 pt-2 border-t border-gray-200">
-                              <div className="text-xs text-gray-500 flex items-center gap-2">
-                                <span>Total responses:</span>
-                                <Badge variant="secondary" className="text-xs">
-                                  {question.answers.reduce((sum, answer) => sum + (answer.multiplicity || 0), 0)}
-                                </Badge>
-                              </div>
+                              {question.expanded && question.answers.length > 0 && (
+                                <div className="mt-3 pl-2 border-l-2 border-gray-200">
+                                  <div className="space-y-2">
+                                    {question.answers.map((answer, answerIndex) => (
+                                      <div key={answerIndex} className="flex items-center justify-between py-1">
+                                        <span className="text-xs text-gray-600 flex-1">• {answer.text}</span>
+                                        {answer.multiplicity !== undefined && (
+                                          <Badge
+                                            variant="outline"
+                                            className={`ml-2 text-xs px-2 py-0 ${getMultiplicityColor(
+                                              answer.multiplicity,
+                                              maxMultiplicity,
+                                            )}`}
+                                          >
+                                            {answer.multiplicity}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {question.answers.length > 0 && question.answers[0].multiplicity !== undefined && (
+                                    <div className="mt-2 pt-2 border-t border-gray-200">
+                                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                                        <span>Total responses:</span>
+                                        <Badge variant="secondary" className="text-xs">
+                                          {question.answers.reduce((sum, answer) => sum + (answer.multiplicity || 0), 0)}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      )
+                    })}
                   </div>
-                </div>
-              )
-            })}
+                )}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

@@ -1,31 +1,89 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
+"use client"
 
-const statistics = [
-  {
-    label: "Unique Questions",
-    value: "39",
-    description: "Total number of unique questions",
-  },
-  {
-    label: "Transcripts Parsed",
-    value: "12",
-    description: "Successfully processed transcripts",
-  },
-  {
-    label: "Avg Answers per Transcript",
-    value: "15.3",
-    description: "Average responses per transcript",
-  },
-];
+import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
+import { useData } from "@/src/components/data-context";
+import { useMemo } from "react";
 
 export function StatisticsSection() {
+  const { nodesData, edgesData, isLoading, error } = useData();
+
+  const statistics = useMemo(() => {
+    if (isLoading || error || !nodesData || !edgesData) {
+      return [
+        {
+          label: "Unique Questions",
+          value: "0",
+          description: "Total number of unique questions",
+        },
+        {
+          label: "Transcripts Parsed",
+          value: "0",
+          description: "Successfully processed transcripts",
+        },
+        {
+          label: "Avg Answers per Transcript",
+          value: "0",
+          description: "Average responses per transcript",
+        },
+      ];
+    }
+
+    // Calculate unique transcript IDs
+    const extractIds = (transcriptId: string): string[] => {
+      // Split by common separators: pipe, comma, semicolon, or whitespace
+      const separators = /[|,;\s]+/;
+      return transcriptId
+        .split(separators)
+        .map(id => id.trim())
+        .filter(id => id !== '' && !isNaN(Number(id))) // Only keep valid numerical IDs
+        .map(id => id.toString()); // Ensure consistent string format
+    };
+
+    const uniqueTranscriptIds = new Set(
+      nodesData
+        .map(node => node.transcript_id)
+        .filter((id: string) => id && id !== '') // Filter out empty or null values
+        .flatMap((transcriptId: string) => extractIds(transcriptId))
+    );
+
+    // Calculate unique questions
+    const questionNodes = nodesData.filter(node => node.node_type === "question");
+    const uniqueQuestions = new Set(questionNodes.map(node => node.Id));
+
+    // Calculate total answers
+    const answerNodes = nodesData.filter(node => node.node_type === "answer");
+    const totalAnswers = answerNodes.length;
+
+    // Calculate average answers per transcript
+    const avgAnswersPerTranscript = uniqueTranscriptIds.size > 0 
+      ? (totalAnswers / uniqueTranscriptIds.size).toFixed(1)
+      : "0";
+
+    return [
+      {
+        label: "Unique Questions",
+        value: uniqueQuestions.size.toString(),
+        description: "Total number of unique questions",
+      },
+      {
+        label: "Transcripts Parsed",
+        value: uniqueTranscriptIds.size.toString(),
+        description: "Successfully processed transcripts",
+      },
+      {
+        label: "Avg Answers per Transcript",
+        value: avgAnswersPerTranscript,
+        description: "Average responses per transcript",
+      },
+    ];
+  }, [nodesData, edgesData, isLoading, error]);
+
   return (
     <Card className="h-full flex flex-col overflow-hidden">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Statistics</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 p-4 overflow-auto"> {/* Changed: overflow-hidden to overflow-auto */}
-        {/* Removed flex items-center justify-center from CardContent for vertical expansion */}
+      <CardContent className="flex-1 p-4 overflow-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 w-full">
           {statistics.map((stat, index) => (
             <div key={index} className="text-center space-y-1">
