@@ -202,6 +202,7 @@ export function NetworkSection({ selectedQuestions = [] }) {
         color: d.color || getDefaultColor(d.node_type || d.type),
         transcript_id: d.transcript_id || undefined,
         multiplicity: d.node_multiplicity ? Number.parseInt(d.node_multiplicity) : undefined,
+        question_ids: d.question_ids || undefined,
       }
       
       if (!node.id) {
@@ -328,8 +329,23 @@ const getFilteredNetworkData = useCallback(() => {
       initialChanged = false;
       }
   }
+  // --- Extract question_ids from selected question nodes ---
+  const selectedQuestionIds = new Set<string>();
+  selectedQuestions.forEach(questionNodeId => {
+    const questionNode = networkData.nodes.find((node: any) => node.id === questionNodeId && node.type === "question");
+    if (questionNode && questionNode.question_ids) {
+      // Handle both string and array formats for question_ids
+      const questionQIDs = Array.isArray(questionNode.question_ids)
+        ? questionNode.question_ids
+        : String(questionNode.question_ids).split('|').filter((id: string) => id.trim() !== '');
+      
+      questionQIDs.forEach(qid => selectedQuestionIds.add(qid));
+    }
+  });
 
-  // --- Phase 2: Add reasons ONLY for answers that belong to selected questions ---
+  console.log("Selected question IDs for reason filtering:", Array.from(selectedQuestionIds));
+
+  // --- Phase 2: Add reasons ONLY for answers that belong to selected questions AND share question IDs ---
   networkData.links.forEach((link: any) => {
     const sourceId = typeof link.source === "string" ? link.source : link.source.id;
     const targetId = typeof link.target === "string" ? link.target : link.target.id;
@@ -340,9 +356,25 @@ const getFilteredNetworkData = useCallback(() => {
         .some(answerSet => answerSet.has(sourceId));
       
       if (answerBelongsToSelectedQuestion && !connectedNodeIds.has(targetId)) {
-        connectedNodeIds.add(targetId);
-        if (!relevantLinks.includes(link)) {
-          relevantLinks.push(link);
+        // Get the reason node to check its question_ids
+        const reasonNode = networkData.nodes.find((node: any) => node.id === targetId);
+        if (reasonNode && reasonNode.question_ids) {
+          // reasonNode.question_ids can be a string (from CSV) or an array
+          const reasonQIDs = Array.isArray(reasonNode.question_ids)
+            ? reasonNode.question_ids
+            : String(reasonNode.question_ids).split('|').filter((id: string) => id.trim() !== '');
+          
+          // Check if the reason shares any question IDs with the selected question IDs
+          const hasSharedQuestionId = reasonQIDs.some(reasonQId => 
+            selectedQuestionIds.has(reasonQId)
+          );
+          
+          if (hasSharedQuestionId) {
+            connectedNodeIds.add(targetId);
+            if (!relevantLinks.includes(link)) {
+              relevantLinks.push(link);
+            }
+          }
         }
       }
       // If both source and target are already connected, ensure the link is added

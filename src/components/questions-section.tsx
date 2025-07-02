@@ -17,6 +17,7 @@ interface Question {
   answers: Answer[]
   expanded: boolean
   category: string
+  question_ids: string
 }
 
 interface Answer {
@@ -24,12 +25,14 @@ interface Answer {
   text: string
   multiplicity?: number
   reasons: Reason[]
+  question_ids: string
 }
 
 interface Reason {
   id: string
   text: string
   multiplicity?: number
+  question_ids: string
 }
 
 interface CategoryGroup {
