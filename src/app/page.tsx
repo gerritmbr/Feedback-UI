@@ -2,7 +2,7 @@
 
 import { useState, useCallback} from "react"
 import { QuestionsSection } from "@/src/components/questions-section"
-import { NetworkSection} from "@/src/components/network-section"
+import { NetworkSection } from "@/src/components/network-section"
 import { DataProvider} from "@/src/components/data-context"
 import { StatisticsSection } from "@/src/components/statistics-section"
 import Header from "@/src/components/dashboard-header"

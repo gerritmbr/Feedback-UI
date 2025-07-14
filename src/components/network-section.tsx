@@ -15,25 +15,15 @@ import {
 import * as d3 from "d3"
 import { useData, Node, Link, NetworkData  } from "@/src/components/data-context"
 
-// interface Node extends d3.SimulationNodeDatum {
-//   id: string
-//   label: string
-//   content: string
-//   type: "question" | "answer" | "reason"
-//   color: string
-//   transcript_id: string
-//   multiplicity?: number
-// }
-
-// interface Link extends d3.SimulationLinkDatum<Node> {
-//   source: string | Node
-//   target: string | Node
-//   transcript_id?: string
-//   type?: "question_to_answer" | "answer_to_reason" | "same_transcript_answer" | "same_transcript_reason" 
-// }
-
 
 type LayoutType = "force" | "circular" | "hierarchical" | "grid" //| "tree"
+
+// Node sizing constants
+const NODE_SIZE_CONFIG = {
+  question: { base: 25, min: 5, max: 50 },
+  answer: { base: 15, min: 5, max: 100 },
+  reason: { base: 10, min: 5, max: 50 }
+} as const
 
 // Helper function for default colors based on node type
 function getDefaultColor(nodeType: string): string {
@@ -71,107 +61,7 @@ export function NetworkSection({ selectedQuestions = [] }) {
     refreshData 
   } = useData();
 
-  // // Load network data from CSV files
-  // const loadNetworkData = useCallback(async () => {
-  //   setLoading(true)
-  //   setError(null)
-
-  //   try {
-  //     console.log("Loading network data from CSV files...")
-
-  //     // Load both CSV files in parallel
-  //     const [nodesData, edgesData] = await Promise.all([d3.csv("/data/nodes.csv"), d3.csv("/data/edges.csv")])
-
-  //     console.log("Raw nodes data sample:", nodesData.slice(0, 3))
-  //     console.log("Raw edges data sample:", edgesData.slice(0, 3))
-
-  //     if (!nodesData || nodesData.length === 0) {
-  //       throw new Error("No data found in nodes.csv")
-  //     }
-
-  //     if (!edgesData || edgesData.length === 0) {
-  //       throw new Error("No data found in edges.csv")
-  //     }
-
-  //     // Check the actual column names in the CSV
-  //     console.log("Nodes CSV columns:", Object.keys(nodesData[0]))
-  //     console.log("Edges CSV columns:", Object.keys(edgesData[0]))
-
-  //     // Process nodes data - using the correct column names from the CSV
-  //     const nodes: Node[] = nodesData.map((d, index) => {
-  //       const node = {
-  //         id: d.Id || d.id || `node_${index}`,
-  //         label: d.Label,
-  //         content: d.content,
-  //         type: (d.node_type || d.type || "unknown") as "question" | "answer" | "reason",
-  //         color: d.color || getDefaultColor(d.node_type || d.type),
-  //         transcript_id: d.transcript_id || undefined,
-  //         multiplicity: d.node_multiplicity ? Number.parseInt(d.node_multiplicity) : undefined,
-  //       }
-
-  //       // Log first few nodes for debugging
-  //       if (index < 3) {
-  //         console.log(`Processed node ${index}:`, node)
-  //       }
-
-  //       return node
-  //     })
-
-  //     // Process edges data - using the correct column names from the CSV
-  //     const links: Link[] = edgesData.map((d, index) => {
-  //       const link = {
-  //         source: d.Source || d.source || "",
-  //         target: d.Target || d.target || "",
-  //         transcript_id: d.transcript_id || undefined,
-  //         type: (d.edge_type || d.type || "unknown_link_type") as "question_to_answer" | "answer_to_reason" | "same_transcript_answer" | "same_transcript_reason",
-  //       }
-
-  //       // Log first few links for debugging
-  //       if (index < 3) {
-  //         console.log(`Processed link ${index}:`, link)
-  //       }
-
-  //       return link
-  //     })
-
-  //     console.log("Total processed nodes:", nodes.length)
-  //     console.log("Total processed links:", links.length)
-
-  //     // Check what types we have
-  //     const typeCount = nodes.reduce(
-  //       (acc, node) => {
-  //         acc[node.type] = (acc[node.type] || 0) + 1
-  //         return acc
-  //       },
-  //       {} as Record<string, number>,
-  //     )
-  //     console.log("Node types found:", typeCount)
-
-  //     // Filter out any invalid nodes or links
-  //     const validNodes = nodes.filter((node) => node.id && node.label && node.type)
-  //     const validLinks = links.filter((link) => link.source && link.target)
-
-  //     console.log("Valid nodes:", validNodes.length)
-  //     console.log("Valid links:", validLinks.length)
-
-  //     if (validNodes.length === 0) {
-  //       throw new Error("No valid nodes found after processing")
-  //     }
-
-  //     setNetworkData({ nodes: validNodes, links: validLinks })
-  //   } catch (err) {
-  //     console.error("Error loading network data:", err)
-  //     setError(`Failed to load network data: ${err.message}`)
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }, [])
-
-  // // Load data on component mount
-  // useEffect(() => {
-  //   loadNetworkData()
-  // }, [loadNetworkData])
-
+  
     // Process the raw CSV data into network format
   const processNetworkData = useCallback(() => {
     
@@ -614,6 +504,55 @@ const getFilteredNetworkData = useCallback(() => {
     }
   }, [])
 
+
+    
+   
+
+  // Create per-category scaling for all node types
+  const createPerCategoryNodeSizeScale = useCallback((nodes: Node[], nodeType: Node['type']) => {
+    const nodesOfType = nodes.filter(n => n.type === nodeType && n.multiplicity && n.multiplicity > 0)
+    
+    if (nodesOfType.length === 0) {
+      return () => NODE_SIZE_CONFIG[nodeType].base
+    }
+    
+    const multiplicities = nodesOfType.map(n => n.multiplicity!)
+    const maxMultiplicity = Math.max(...multiplicities)
+    const minMultiplicity = Math.min(...multiplicities)
+    
+    // If all nodes have the same multiplicity, return base size
+    if (maxMultiplicity === minMultiplicity) {
+      return () => NODE_SIZE_CONFIG[nodeType].base
+    }
+    
+    // Use power scale for more dramatic differences in high-multiplicity nodes
+    return d3.scalePow()
+      .exponent(2)  // This makes high values more prominent
+      .domain([minMultiplicity, maxMultiplicity])
+      .range([NODE_SIZE_CONFIG[nodeType].min, NODE_SIZE_CONFIG[nodeType].max])
+      .clamp(true)
+  }, [])
+
+    // You can also add minimum size enforcement based on multiplicity
+  const getNodeSize = (node: Node, sizeScale: (mult: number) => number) => {
+    if (!node.multiplicity || node.multiplicity <= 0) {
+      return NODE_SIZE_CONFIG[node.type].base
+    }
+    
+    const scaledSize = sizeScale(node.multiplicity)
+    
+    // Ensure high-multiplicity nodes are always significantly larger
+    if (node.multiplicity > 10) {
+      return Math.max(scaledSize, NODE_SIZE_CONFIG[node.type].base * 1.5)
+    }
+    if (node.multiplicity > 5) {
+      return Math.max(scaledSize, NODE_SIZE_CONFIG[node.type].base * 1.2)
+    }
+    
+    return scaledSize
+  }
+
+
   // Update network visualization
   const updateVisualization = useCallback(
     (nodes: Node[], links: Link[], layoutType: LayoutType, width: number, height: number) => {
@@ -741,26 +680,54 @@ const getFilteredNetworkData = useCallback(() => {
         );
 
 
+      // Create per-category scaling for each node type
+      const questionSizeScale = createPerCategoryNodeSizeScale(nodes, 'question')
+      const answerSizeScale = createPerCategoryNodeSizeScale(nodes, 'answer')
+      const reasonSizeScale = createPerCategoryNodeSizeScale(nodes, 'reason')
+
       // --- Update Attributes for Circles within Node Groups ---
-      node.select("circle") // Select the circle within each node group (both enter and update)
-          .attr("r", (d) => {
-              if (d.type === "question") return 14;
-              if (d.type === "answer") {
-                  const baseRadius = 10;
-                  const maxRadius = 16;
-                  if (d.multiplicity && d.multiplicity > 0) {
-                      const answerNodes = nodes.filter((n) => n.type === "answer" && n.multiplicity && n.multiplicity > 0);
-                      if (answerNodes.length > 0) {
-                          const maxMultiplicity = Math.max(...answerNodes.map((n) => n.multiplicity!));
-                          const scale = maxMultiplicity === 0 ? 0 : d.multiplicity / maxMultiplicity;
-                          return baseRadius + (maxRadius - baseRadius) * scale;
-                      }
-                  }
-                  return baseRadius;
-              }
-              return 6; // reason
-          })
-          .attr("fill", (d) => d.color);
+      // node.select("circle") // Select the circle within each node group (both enter and update)
+      //     .attr("r", (d) => {
+      //         if (d.type === "question") {
+      //             return d.multiplicity && d.multiplicity > 0 
+      //                 ? questionSizeScale(d.multiplicity)
+      //                 : NODE_SIZE_CONFIG.question.base
+      //         }
+      //         if (d.type === "answer") {
+      //             return d.multiplicity && d.multiplicity > 0 
+      //                 ? answerSizeScale(d.multiplicity)
+      //                 : NODE_SIZE_CONFIG.answer.base
+      //         }
+      //         if (d.type === "reason") {
+      //             return d.multiplicity && d.multiplicity > 0 
+      //                 ? reasonSizeScale(d.multiplicity)
+      //                 : NODE_SIZE_CONFIG.reason.base
+      //         }
+      //         return NODE_SIZE_CONFIG.reason.base // fallback
+      //     })
+      //     .attr("fill", (d) => d.color);
+
+          // Replace this section in your updateVisualization function:
+      node.select("circle")
+        .attr("r", (d) => {
+          if (d.type === "question") {
+            return d.multiplicity && d.multiplicity > 0 
+              ? getNodeSize(d, questionSizeScale)  // Use the new helper function
+              : NODE_SIZE_CONFIG.question.base
+          }
+          if (d.type === "answer") {
+            return d.multiplicity && d.multiplicity > 0 
+              ? getNodeSize(d, answerSizeScale)
+              : NODE_SIZE_CONFIG.answer.base
+          }
+          if (d.type === "reason") {
+            return d.multiplicity && d.multiplicity > 0 
+              ? getNodeSize(d, reasonSizeScale)
+              : NODE_SIZE_CONFIG.reason.base
+          }
+          return NODE_SIZE_CONFIG.reason.base
+        })
+        .attr("fill", (d) => d.color)
 
 
       // --- Update Attributes for Labels within Node Groups ---
