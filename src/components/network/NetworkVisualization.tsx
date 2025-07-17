@@ -44,6 +44,36 @@ function getDefaultColor(nodeType: string): string {
   }
 }
 
+// Helper function to split text into multiple lines
+function splitTextIntoLines(text: string, maxCharsPerLine: number): string[] {
+  if (!text) return []
+  
+  const words = text.split(' ')
+  const lines: string[] = []
+  let currentLine = ''
+  
+  for (const word of words) {
+    if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
+      currentLine += (currentLine ? ' ' : '') + word
+    } else {
+      if (currentLine) {
+        lines.push(currentLine)
+        currentLine = word
+      } else {
+        // Word is too long, split it
+        lines.push(word.substring(0, maxCharsPerLine))
+        currentLine = word.substring(maxCharsPerLine)
+      }
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine)
+  }
+  
+  return lines
+}
+
 export function NetworkVisualization({
   nodes,
   links,
@@ -58,9 +88,118 @@ export function NetworkVisualization({
   const containerGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null)
   const [dimensions, setDimensions] = useState({ width: propWidth, height: propHeight })
+  const [currentZoomLevel, setCurrentZoomLevel] = useState(1)
+  const tooltipRef = useRef<HTMLDivElement>(null)
 
   const { initializeSVG } = useD3Network(svgRef, containerGroupRef)
   const { setupZoom, handleZoomIn, handleZoomOut, handleResetView } = useNetworkZoom(svgRef, containerGroupRef)
+
+  // Tooltip functions
+  const showTooltip = useCallback((event: any, node: Node) => {
+    if (!tooltipRef.current) return
+    
+    const tooltip = tooltipRef.current
+    tooltip.style.display = 'block'
+    
+    // Use D3's mouse position functions
+    const [mouseX, mouseY] = d3.pointer(event, document.body)
+    
+    tooltip.style.left = `${mouseX + 10}px`
+    tooltip.style.top = `${mouseY - 10}px`
+    
+    // Set tooltip content based on node type
+    const getTypeDisplay = (type: string) => {
+      switch (type) {
+        case "question": return "Question"
+        case "answer": return "Answer"
+        case "reason": return "Reason"
+        default: return type
+      }
+    }
+    
+    tooltip.innerHTML = `
+      <div style="font-weight: 600; margin-bottom: 4px; color: #1f2937;">${getTypeDisplay(node.type)}</div>
+      <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">ID: ${node.id}</div>
+      ${node.multiplicity ? `<div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Multiplicity: ${node.multiplicity}</div>` : ''}
+      ${node.content ? `<div style="font-size: 12px; color: #374151; max-width: 200px; word-wrap: break-word;">${node.content}</div>` : ''}
+    `
+  }, [])
+
+  const hideTooltip = useCallback(() => {
+    if (!tooltipRef.current) return
+    tooltipRef.current.style.display = 'none'
+  }, [])
+
+  const updateTooltipPosition = useCallback((event: any) => {
+    if (!tooltipRef.current || tooltipRef.current.style.display === 'none') return
+    
+    const [mouseX, mouseY] = d3.pointer(event, document.body)
+    
+    tooltipRef.current.style.left = `${mouseX + 10}px`
+    tooltipRef.current.style.top = `${mouseY - 10}px`
+  }, [])
+
+  // Function to create multi-line labels with background
+  const createMultiLineLabel = useCallback((labelGroup: d3.Selection<SVGGElement, Node, SVGGElement, unknown>, node: Node) => {
+    // Clear existing content
+    labelGroup.selectAll("*").remove()
+    
+    // Dynamic font size based on zoom level and node type
+    const baseFontSize = node.type === "question" ? 11 : node.type === "answer" ? 9 : 8
+    const fontSize = Math.max(6, Math.min(14, baseFontSize * currentZoomLevel))
+    
+    // Line settings based on node type
+    const maxCharsPerLine = node.type === "question" ? 25 : node.type === "answer" ? 20 : 15
+    const lineHeight = fontSize * 1.2
+    const maxLines = 3
+    
+    // Split text into lines
+    const text = node.content || node.id
+    const lines = splitTextIntoLines(text, maxCharsPerLine).slice(0, maxLines)
+    
+    // Add ellipsis if text was truncated
+    if (lines.length === maxLines && splitTextIntoLines(text, maxCharsPerLine).length > maxLines) {
+      lines[lines.length - 1] = lines[lines.length - 1].substring(0, maxCharsPerLine - 3) + "..."
+    }
+    
+    // Calculate label dimensions
+    const labelWidth = Math.max(...lines.map(line => line.length * fontSize * 0.6))
+    const labelHeight = lines.length * lineHeight
+    
+    // Smart positioning to avoid overlaps - get node size based on type
+    const nodeRadius = node.type === "question" ? NODE_SIZE_CONFIG.question.base : 
+                     node.type === "answer" ? NODE_SIZE_CONFIG.answer.base : 
+                     NODE_SIZE_CONFIG.reason.base
+    const yOffset = nodeRadius + 8
+    
+    // Add background rectangle
+    labelGroup.append("rect")
+      .attr("x", -labelWidth / 2 - 4)
+      .attr("y", yOffset - 4)
+      .attr("width", labelWidth + 8)
+      .attr("height", labelHeight + 8)
+      .attr("fill", "rgba(255, 255, 255, 0.9)")
+      .attr("stroke", "rgba(0, 0, 0, 0.2)")
+      .attr("stroke-width", 1)
+      .attr("rx", 4)
+      .attr("ry", 4)
+    
+    // Add text lines
+    lines.forEach((line, index) => {
+      labelGroup.append("text")
+        .attr("x", 0)
+        .attr("y", yOffset + (index * lineHeight) + fontSize)
+        .attr("text-anchor", "middle")
+        .attr("font-size", `${fontSize}px`)
+        .attr("font-family", "system-ui, sans-serif")
+        .attr("font-weight", node.type === "question" ? "600" : "400")
+        .attr("fill", "#374151")
+        .text(line)
+    })
+    
+    // Position the entire label group
+    labelGroup.attr("transform", `translate(0, 0)`)
+  }, [currentZoomLevel])
 
   // Update dimensions when container size changes
   useEffect(() => {
@@ -305,9 +444,14 @@ export function NetworkVisualization({
               onNodeClick?.(d)
             })
             .on("mouseenter", (event, d) => {
+              showTooltip(event, d)
               onNodeHover?.(d)
             })
+            .on("mousemove", (event, d) => {
+              updateTooltipPosition(event)
+            })
             .on("mouseleave", () => {
+              hideTooltip()
               onNodeHover?.(null)
             })
 
@@ -315,10 +459,9 @@ export function NetworkVisualization({
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
 
-          nodeEnterGroup.append("text")
-            .attr("class", "node-label")
-            .attr("text-anchor", "middle")
-            .attr("fill", "#374151")
+          // Append group for multi-line labels
+          nodeEnterGroup.append("g")
+            .attr("class", "node-label-group")
             .style("pointer-events", "none")
 
           return nodeEnterGroup
@@ -354,18 +497,11 @@ export function NetworkVisualization({
       })
       .attr("fill", (d) => d.color || getDefaultColor(d.type))
 
-    // Update text labels
-    node.select(".node-label")
-      .text((d) => (d.content && d.content.length > 100 ? d.content.substring(0, 100) + "..." : d.content || d.id))
-      .attr("font-size", (d) => {
-        if (d.type === "question") return "11px"
-        if (d.type === "answer") return "9px"
-        return "8px"
-      })
-      .attr("dy", (d) => {
-        if (d.type === "question") return 28
-        if (d.type === "answer") return 22
-        return 18
+    // Update node labels with multi-line support
+    node.select(".node-label-group")
+      .each(function(d) {
+        const labelGroup = d3.select(this)
+        createMultiLineLabel(labelGroup, d)
       })
 
     // Simulation setup
@@ -407,12 +543,27 @@ export function NetworkVisualization({
     } else {
       simulation.alpha(1).restart()
     }
-  }, [nodes, links, layout, dimensions.width, dimensions.height, applyLayout, createPerCategoryNodeSizeScale, onNodeClick, onNodeHover])
+  }, [nodes, links, layout, dimensions.width, dimensions.height, applyLayout, createPerCategoryNodeSizeScale, onNodeClick, onNodeHover, showTooltip, hideTooltip, updateTooltipPosition, createMultiLineLabel])
 
   // Initialize SVG when component mounts
   useEffect(() => {
     initializeSVG()
     setupZoom()
+    
+    // Add zoom event listener to track zoom level changes
+    if (svgRef.current) {
+      const svg = d3.select(svgRef.current)
+      const zoom = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 4])
+        .on("zoom", (event) => {
+          if (containerGroupRef.current) {
+            containerGroupRef.current.attr("transform", event.transform)
+            setCurrentZoomLevel(event.transform.k)
+          }
+        })
+      
+      svg.call(zoom)
+    }
   }, [initializeSVG, setupZoom])
 
   // Update visualization when data changes
@@ -426,15 +577,35 @@ export function NetworkVisualization({
       if (simulationRef.current) {
         simulationRef.current.stop()
       }
+      hideTooltip()
     }
-  }, [])
+  }, [hideTooltip])
 
   return (
-    <svg
-      ref={svgRef}
-      className="w-full h-full"
-      style={{ maxHeight: "100%", maxWidth: "100%" }}
-      preserveAspectRatio="xMidYMid meet"
-    />
+    <>
+      <svg
+        ref={svgRef}
+        className="w-full h-full"
+        style={{ maxHeight: "100%", maxWidth: "100%" }}
+        preserveAspectRatio="xMidYMid meet"
+      />
+      {/* Tooltip */}
+      <div
+        ref={tooltipRef}
+        style={{
+          position: 'fixed',
+          display: 'none',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          padding: '8px 12px',
+          fontSize: '14px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+          zIndex: 1000,
+          pointerEvents: 'none',
+          maxWidth: '250px'
+        }}
+      />
+    </>
   )
 }
