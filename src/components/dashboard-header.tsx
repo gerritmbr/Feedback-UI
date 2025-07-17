@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useData } from "@/src/components/data-context"; // Import the useData hook
+import { useFeedbackData } from "@/src/components/feedback-data-context"; // Import the useFeedbackData hook
 import UploadButton from "@/src/components/upload-button";
 import UploadPopup from "@/src/components/upload-popup";
 
@@ -9,7 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = () => {
   const [showUploadPopup, setShowUploadPopup] = useState(false);
-  const { hasLocalData, uploadTimestamp, refreshData } = useData();
+  const { hasLocalData, uploadTimestamp, refreshData } = useFeedbackData();
 
   const handleDataUploaded = () => {
     refreshData(); // This will reload data from localStorage

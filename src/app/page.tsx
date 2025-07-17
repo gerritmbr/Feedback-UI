@@ -2,9 +2,11 @@
 
 import { useState, useCallback} from "react"
 import { QuestionsSection } from "@/src/components/questions-section"
-import { NetworkSection } from "@/src/components/network-section"
-import { DataProvider} from "@/src/components/data-context"
+// import { NetworkSection } from "@/src/components/network-section"
+import { FeedbackDataProvider} from "@/src/components/feedback-data-context"
 import { StatisticsSection } from "@/src/components/statistics-section"
+import { PersonaSection } from "@/src/components/persona-section"
+import { FeedbackNetworkSection } from "@/src/components/feedback-network-section";
 import Header from "@/src/components/dashboard-header"
 
 export default function Dashboard() { // <-- START Dashboard FUNCTION
@@ -20,7 +22,7 @@ export default function Dashboard() { // <-- START Dashboard FUNCTION
   }, []); // <-- END handleDataUploaded CALLBACK
 
   return ( // <-- START Dashboard's JSX RETURN
-    <DataProvider>
+    <FeedbackDataProvider>
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
         <Header onDataUploaded={handleDataUploaded} />
@@ -31,7 +33,7 @@ export default function Dashboard() { // <-- START Dashboard FUNCTION
           <div className="flex flex-col lg:flex-row gap-6 flex-1">
             {/* Network Section - Now takes 2/3 width on large screens */}
             <div className="flex-1 lg:flex-[2] min-h-[300px] max-h-[90vh]">
-              <NetworkSection selectedQuestions={selectedQuestions} />
+              <FeedbackNetworkSection selectedQuestions={selectedQuestions} />
             </div>
 
             {/* Questions Section - Now takes 1/3 width on large screens */}
@@ -44,8 +46,10 @@ export default function Dashboard() { // <-- START Dashboard FUNCTION
           <div className="w-full">
             <StatisticsSection />
           </div>
+
+
         </div>
       </div>
-    </DataProvider>
+    </FeedbackDataProvider>
   ); // <-- END Dashboard's JSX RETURN
 } // <-- END Dashboard FUNCTION (this is the crucial one that was missing or misplaced last time)

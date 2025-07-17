@@ -1,11 +1,11 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
-import { useData } from "@/src/components/data-context";
+import { useFeedbackData } from "@/src/components/feedback-data-context";
 import { useMemo } from "react";
 
 export function StatisticsSection() {
-  const { nodesData, edgesData, isLoading, error } = useData();
+  const { nodesData, edgesData, isLoading, error } = useFeedbackData();
 
   const statistics = useMemo(() => {
     if (isLoading || error || !nodesData || !edgesData) {
@@ -81,7 +81,7 @@ export function StatisticsSection() {
   return (
     <Card className="h-full flex flex-col overflow-hidden">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg">Statistics</CardTitle>
+        <CardTitle>Statistics</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 p-4 overflow-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 w-full">

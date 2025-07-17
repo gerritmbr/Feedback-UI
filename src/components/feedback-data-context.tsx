@@ -30,7 +30,7 @@ export interface NetworkData {
 }
 
 // Data Loading of CSV
-interface DataContextType {
+interface FeedbackDataContextType {
   nodesData: any[];
   edgesData: any[];
   isLoading: boolean;
@@ -42,29 +42,29 @@ interface DataContextType {
   clearData: () => void;
 }
 
-const DataContext = createContext<DataContextType | undefined>(undefined);
+const FeedbackDataContext = createContext<FeedbackDataContextType | undefined>(undefined);
 
-export const useData = () => {
-  const context = useContext(DataContext);
+export const useFeedbackData = () => {
+  const context = useContext(FeedbackDataContext);
   if (!context) {
-    throw new Error('useData must be used within a DataProvider');
+    throw new Error('useFeedbackData must be used within a FeedbackDataProvider');
   }
   return context;
 };
 
 // Data loading functions
 const hasLocalCSVData = () => {
-  return localStorage.getItem('csv_nodes_data') && localStorage.getItem('csv_edges_data');
+  return localStorage.getItem('feedback_csv_nodes_data') && localStorage.getItem('feedback_csv_edges_data');
 };
 
 const getUploadTimestamp = () => {
-  const timestamp = localStorage.getItem('csv_upload_timestamp');
+  const timestamp = localStorage.getItem('feedback_csv_upload_timestamp');
   return timestamp ? new Date(parseInt(timestamp)) : null;
 };
 
 const loadCSVData = async () => {
-  const nodesData = localStorage.getItem('csv_nodes_data');
-  const edgesData = localStorage.getItem('csv_edges_data');
+  const nodesData = localStorage.getItem('feedback_csv_nodes_data');
+  const edgesData = localStorage.getItem('feedback_csv_edges_data');
 
   if (nodesData && edgesData) {
     console.log("Loading data from localStorage (uploaded files)");
@@ -105,7 +105,7 @@ const validateCSVData = (nodesData: any[], edgesData: any[]) => {
   return errors;
 };
 
-export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const FeedbackDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [nodesData, setNodesData] = useState<any[]>([]);
   const [edgesData, setEdgesData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -143,9 +143,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearData = () => {
-    localStorage.removeItem('csv_nodes_data');
-    localStorage.removeItem('csv_edges_data');
-    localStorage.removeItem('csv_upload_timestamp');
+    localStorage.removeItem('feedback_csv_nodes_data');
+    localStorage.removeItem('feedback_csv_edges_data');
+    localStorage.removeItem('feedback_csv_upload_timestamp');
     setNodesData([]);
     setEdgesData([]);
     setDataSource('none');
@@ -156,7 +156,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadData();
   }, []);
 
-  const value: DataContextType = {
+  const value: FeedbackDataContextType = {
     nodesData,
     edgesData,
     isLoading,
@@ -169,8 +169,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <DataContext.Provider value={value}>
+    <FeedbackDataContext.Provider value={value}>
       {children}
-    </DataContext.Provider>
+    </FeedbackDataContext.Provider>
   );
 };

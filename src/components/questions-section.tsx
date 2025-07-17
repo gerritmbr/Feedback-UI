@@ -7,8 +7,8 @@ import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react"
 import { Button } from "@/src/components/ui/button"
 import { Badge } from "@/src/components/ui/badge"
 
-// Import useData and types from your data-context file
-import { useData, Node, Link } from "@/src/components/data-context"
+// Import useFeedbackData and types from your feedback-data-context file
+import { useFeedbackData, Node, Link } from "@/src/components/feedback-data-context"
 
 interface Question {
   id: string
@@ -50,14 +50,14 @@ export function QuestionsSection({ onQuestionToggle }: QuestionsSectionProps) {
   const [questions, setQuestions] = useState<Question[]>([])
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
 
-  // Use the useData hook to get the shared data state
+  // Use the useFeedbackData hook to get the shared data state
   const {
     nodesData,
     edgesData,
     isLoading,
     error,
     refreshData
-  } = useData();
+  } = useFeedbackData();
 
   // Process data from context whenever nodesData or edgesData change
   const processDataForQuestions = useCallback(() => {

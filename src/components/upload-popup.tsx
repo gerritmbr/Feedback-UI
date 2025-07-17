@@ -65,9 +65,9 @@ const UploadPopup = ({ isOpen, onClose, onDataUploaded }: UploadPopupProps) => {
       console.log("Uploaded edges CSV columns:", Object.keys(parsedEdges[0] || {}));
 
       // Store in localStorage
-      localStorage.setItem('csv_nodes_data', nodesText);
-      localStorage.setItem('csv_edges_data', edgesText);
-      localStorage.setItem('csv_upload_timestamp', Date.now().toString());
+      localStorage.setItem('feedback_csv_nodes_data', nodesText);
+      localStorage.setItem('feedback_csv_edges_data', edgesText);
+      localStorage.setItem('feedback_csv_upload_timestamp', Date.now().toString());
 
       // Notify parent component
       onDataUploaded();
@@ -92,9 +92,9 @@ const UploadPopup = ({ isOpen, onClose, onDataUploaded }: UploadPopupProps) => {
   };
 
   const handleClear = () => {
-    localStorage.removeItem('csv_nodes_data');
-    localStorage.removeItem('csv_edges_data');
-    localStorage.removeItem('csv_upload_timestamp');
+    localStorage.removeItem('feedback_csv_nodes_data');
+    localStorage.removeItem('feedback_csv_edges_data');
+    localStorage.removeItem('feedback_csv_upload_timestamp');
     setNodesFile(null);
     setEdgesFile(null);
     if (nodesInputRef.current) nodesInputRef.current.value = '';
