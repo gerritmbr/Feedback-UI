@@ -47,6 +47,11 @@ export default function Dashboard() { // <-- START Dashboard FUNCTION
             <StatisticsSection />
           </div>
 
+          {/* Persona section */}
+          <div className="w-full">
+            <PersonaSection />
+          </div>
+
 
         </div>
       </div>

@@ -1,0 +1,77 @@
+Id,Label,content,node_type,node_multiplicity
+1,The Hands-On Practitioner,"Students who are motivated by practical application and real-world connections. They crave courses with projects, case studies, and industry connections, becoming frustrated with purely theoretical lectures. They light up when building something tangible or hearing from guest practitioners.",persona,1
+2,Focuses on practical application of theory,Focuses on practical application of theory,attribute,1
+3,Craves hands-on projects and case studies,Craves hands-on projects and case studies,attribute,1
+4,Values industry connections and guest speakers,Values industry connections and guest speakers,attribute,1
+5,Gets frustrated by purely theoretical lectures,Gets frustrated by purely theoretical lectures,attribute,2
+6,Rates project-based courses highly,Rates project-based courses highly,attribute,1
+7,Learns best through 'learning by doing' approaches,Learns best through 'learning by doing' approaches,attribute,1
+8,Wants every lecture to answer 'How would I use this in a job?',Wants every lecture to answer 'How would I use this in a job?',attribute,1
+9,Enjoys building tangible outcomes,Enjoys building tangible outcomes,attribute,1
+10,Seeks experiential learning opportunities,Seeks experiential learning opportunities,attribute,1
+11,Becomes energized when discussing real-world problem solving,Becomes energized when discussing real-world problem solving,attribute,1
+12,The Digital Flexibility Seeker,"Students who value flexibility in when and where they learn, heavily using digital resources. They often juggle part-time work, family, or other commitments, so they need the program to be accommodating. They are self-directed learners when given the proper resources.",persona,1
+13,Values flexibility in learning schedule and location,Values flexibility in learning schedule and location,attribute,1
+14,Relies heavily on digital resources and online materials,Relies heavily on digital resources and online materials,attribute,1
+15,Appreciates recorded lectures and hybrid options,Appreciates recorded lectures and hybrid options,attribute,1
+16,Juggles multiple commitments like work or family,Juggles multiple commitments like work or family,attribute,1
+17,Uses video controls to rewind and pause content,Uses video controls to rewind and pause content,attribute,1
+18,Prefers asynchronous learning content,Prefers asynchronous learning content,attribute,1
+19,Seeks understanding from instructors about attendance flexibility,Seeks understanding from instructors about attendance flexibility,attribute,1
+20,Thrives with online forums and quick email responses,Thrives with online forums and quick email responses,attribute,1
+21,Works at unconventional hours,Works at unconventional hours,attribute,1
+22,Demonstrates self-directed learning habits,Demonstrates self-directed learning habits,attribute,1
+23,Re-watches difficult content until understanding clicks,Re-watches difficult content until understanding clicks,attribute,1
+24,Asks for Zoom access and lecture recordings,Asks for Zoom access and lecture recordings,attribute,1
+25,The Collaborative Team Player,"Students who genuinely enjoy group projects and class discussions, often mentioning fun and exchange when describing teamwork. They flourish in interactive environments and prefer collaborative problem-solving over one-way lectures, though they dislike when effort isn't matched by others.",persona,1
+26,Enjoys group projects and collaborative work,Enjoys group projects and collaborative work,attribute,1
+27,Values class discussions and peer interaction,Values class discussions and peer interaction,attribute,1
+28,Finds teamwork fun and engaging,Finds teamwork fun and engaging,attribute,1
+29,Appreciates exchange of ideas with others,Appreciates exchange of ideas with others,attribute,1
+30,Steps up as team coordinator or leader when needed,Steps up as team coordinator or leader when needed,attribute,1
+31,Thrives in interactive learning environments,Thrives in interactive learning environments,attribute,1
+32,Prefers workshops and collective problem-solving,Prefers workshops and collective problem-solving,attribute,1
+33,Gets frustrated by free-riders in group settings,Gets frustrated by free-riders in group settings,attribute,2
+34,Notices and speaks about free-riders in groups,Notices and speaks about free-riders in groups,attribute,1
+35,Brings enthusiasm and creativity to team settings,Brings enthusiasm and creativity to team settings,attribute,1
+36,Values instructor acknowledgment of good teamwork,Values instructor acknowledgment of good teamwork,attribute,1
+37,The Independent Achiever,"Students who prefer to work solo and often express frustration with group work due to past bad experiences. They are self-reliant, take pride in individual workmanship, and worry about unfair distribution of work and grades in team settings.",persona,1
+38,Prefers working alone over team collaboration,Prefers working alone over team collaboration,attribute,1
+39,Expresses distrust in group work effectiveness,Expresses distrust in group work effectiveness,attribute,1
+40,Takes pride in individual workmanship and quality,Takes pride in individual workmanship and quality,attribute,1
+41,Demonstrates self-reliance in academic tasks,Demonstrates self-reliance in academic tasks,attribute,1
+42,Rates group work assignments poorly,Rates group work assignments poorly,attribute,1
+43,Worries about unfair grade distribution in teams,Worries about unfair grade distribution in teams,attribute,1
+44,Assumes extra work to ensure quality outcomes,Assumes extra work to ensure quality outcomes,attribute,1
+45,Participates in required group work reluctantly,Participates in required group work reluctantly,attribute,1
+46,Seeks options for individual assessment components,Seeks options for individual assessment components,attribute,1
+47,Values recognition of individual effort within teamwork,Values recognition of individual effort within teamwork,attribute,1
+48,Prefers clear accountability mechanisms in group settings,Prefers clear accountability mechanisms in group settings,attribute,1
+49,Values consistent communication and explanations from instructors,Values consistent communication and explanations from instructors,attribute,3
+50,The International Participant,"Students who need an English-friendly, inclusive program that welcomes participants regardless of native language or background. They depend on English instruction and value cultural inclusion, appreciating when professors explain German-specific references and when peers are open to diverse perspectives.",persona,1
+51,Depends on English-language instruction,Depends on English-language instruction,attribute,1
+52,Values cultural inclusion and diversity,Values cultural inclusion and diversity,attribute,1
+53,Appreciates explanations of German-specific references,Appreciates explanations of German-specific references,attribute,1
+54,Seeks patience and understanding from instructors and peers,Seeks patience and understanding from instructors and peers,attribute,1
+55,Thrives in truly global program environments,Thrives in truly global program environments,attribute,1
+56,Values having classmates from different countries,Values having classmates from different countries,attribute,1
+57,Needs key materials available in English,Needs key materials available in English,attribute,1
+58,Requires guidance with German administrative issues,Requires guidance with German administrative issues,attribute,1
+59,Contributes diverse perspectives to discussions,Contributes diverse perspectives to discussions,attribute,1
+60,Feels satisfied when language barriers don't prevent participation,Feels satisfied when language barriers don't prevent participation,attribute,1
+61,Appreciates inclusive classroom culture,Appreciates inclusive classroom culture,attribute,1
+62,Benefits from brief explanations of local references,Benefits from brief explanations of local references,attribute,1
+63,The Structure & Clarity Seeker,"Students who become anxious or frustrated when things are vague, unorganized, or last-minute. They thrive on clarity, structure, and knowing what to expect, wanting detailed syllabi, clear instructions, and consistent communication.",persona,1
+64,Becomes anxious with vague or unorganized content,Becomes anxious with vague or unorganized content,attribute,1
+65,Thrives on clear structure and detailed planning,Thrives on clear structure and detailed planning,attribute,1
+66,Wants detailed syllabi and course outlines,Wants detailed syllabi and course outlines,attribute,1
+67,Seeks clear instructions and expectations upfront,Seeks clear instructions and expectations upfront,attribute,1
+68,Plans semester carefully and systematically,Plans semester carefully and systematically,attribute,1
+69,Dislikes sudden changes in exam format or requirements,Dislikes sudden changes in exam format or requirements,attribute,1
+70,Gets frustrated by unclear project briefs,Gets frustrated by unclear project briefs,attribute,1
+71,Shines when courses are well-organized,Shines when courses are well-organized,attribute,1
+72,Appreciates logical flow in lectures with clear agendas,Appreciates logical flow in lectures with clear agendas,attribute,1
+73,Rarely misses deadlines when expectations are clear,Rarely misses deadlines when expectations are clear,attribute,1
+74,Needs transparency in all aspects of teaching,Needs transparency in all aspects of teaching,attribute,1
+75,Requires alignment between taught content and assessments,Requires alignment between taught content and assessments,attribute,1
+76,Depends on structured environment for academic security,Depends on structured environment for academic security,attribute,1
