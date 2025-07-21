@@ -26,7 +26,7 @@ interface NetworkVisualizationProps {
 // Node sizing constants
 const NODE_SIZE_CONFIG = {
   question: { base: 25, min: 5, max: 50 },
-  answer: { base: 15, min: 5, max: 100 },
+  answer: { base: 15, min: 5, max: 80 },
   reason: { base: 10, min: 5, max: 50 }
 } as const
 
@@ -144,9 +144,9 @@ export function NetworkVisualization({
     // Clear existing content
     labelGroup.selectAll("*").remove()
     
-    // Dynamic font size based on zoom level and node type
+    // Fixed font size based on node type (no zoom scaling)
     const baseFontSize = node.type === "question" ? 11 : node.type === "answer" ? 9 : 8
-    const fontSize = Math.max(6, Math.min(14, baseFontSize * currentZoomLevel))
+    const fontSize = baseFontSize
     
     // Line settings based on node type
     const maxCharsPerLine = node.type === "question" ? 25 : node.type === "answer" ? 20 : 15
@@ -199,7 +199,9 @@ export function NetworkVisualization({
     
     // Position the entire label group
     labelGroup.attr("transform", `translate(0, 0)`)
-  }, [currentZoomLevel])
+  }, [])
+
+
 
   // Update dimensions when container size changes
   useEffect(() => {
@@ -508,8 +510,9 @@ export function NetworkVisualization({
     const simulation = d3
       .forceSimulation(nodes as d3.SimulationNodeDatum[])
       .force("link", d3.forceLink(links).id((d: any) => d.id).distance(100))
-      .force("charge", d3.forceManyBody().strength(-300))
+      .force("charge", d3.forceManyBody().strength(20))
       .force("center", d3.forceCenter(dimensions.width / 2, dimensions.height / 2))
+      .force("collide", d3.forceCollide((d) => 50))
 
     simulationRef.current = simulation
 
@@ -543,7 +546,7 @@ export function NetworkVisualization({
     } else {
       simulation.alpha(1).restart()
     }
-  }, [nodes, links, layout, dimensions.width, dimensions.height, applyLayout, createPerCategoryNodeSizeScale, onNodeClick, onNodeHover, showTooltip, hideTooltip, updateTooltipPosition, createMultiLineLabel])
+  }, [nodes, links, layout, dimensions.width, dimensions.height, applyLayout, createPerCategoryNodeSizeScale, onNodeClick, onNodeHover, showTooltip, hideTooltip, updateTooltipPosition, createMultiLineLabel, currentZoomLevel])
 
   // Initialize SVG when component mounts
   useEffect(() => {
@@ -566,10 +569,10 @@ export function NetworkVisualization({
     }
   }, [initializeSVG, setupZoom])
 
-  // Update visualization when data changes
+  // Update visualization when data changes (but not zoom level)
   useEffect(() => {
     updateVisualization()
-  }, [updateVisualization])
+  }, [nodes, links, layout, dimensions.width, dimensions.height])
 
   // Cleanup simulation on unmount
   useEffect(() => {
