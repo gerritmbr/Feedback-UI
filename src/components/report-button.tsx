@@ -19,7 +19,7 @@ export const ReportButton = () => {
   const handleDownloadConfirm = async () => {
     try {
       // Fetch the PDF file
-      const response = await fetch('/data/insight_report_placeholder.pdf');
+      const response = await fetch('/data/mock_insight_report.pdf');
       if (!response.ok) {
         throw new Error('Failed to fetch PDF');
       }
@@ -34,7 +34,7 @@ export const ReportButton = () => {
       // Create and trigger download link
       const downloadLink = document.createElement('a');
       downloadLink.href = downloadUrl;
-      downloadLink.download = 'insights_report_placeholder.pdf';
+      downloadLink.download = 'insight_report.pdf';
       downloadLink.style.display = 'none';
       
       // Add to DOM, click, and remove

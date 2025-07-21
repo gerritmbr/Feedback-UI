@@ -7,6 +7,7 @@ import * as d3 from "d3"
 import { PersonaNode, PersonaLink } from "@/src/components/persona-data-context"
 import { useD3Network } from "./hooks/useD3Network"
 import { useNetworkZoom } from "./hooks/useNetworkZoom"
+import { usePersonaNetworkBounds } from "./hooks/usePersonaNetworkBounds"
 
 interface PersonaNetworkVisualizationProps {
   nodes: PersonaNode[]
@@ -22,8 +23,6 @@ interface PersonaNetworkVisualizationProps {
     handleResetView: () => void
     getCurrentTransform?: () => any
   }) => void
-  preservedTransform?: any
-  onTransformApplied?: () => void
 }
 
 // Node sizing constants for persona network
@@ -82,19 +81,23 @@ export function PersonaNetworkVisualization({
   height,
   onNodeClick,
   onNodeHover,
-  onZoomControlsReady,
-  preservedTransform,
-  onTransformApplied
+  onZoomControlsReady
 }: PersonaNetworkVisualizationProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [simulation, setSimulation] = useState<d3.Simulation<PersonaNode, PersonaLink> | null>(null)
   const containerGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
   const [isFirstLoad, setIsFirstLoad] = useState(true)
   const [currentZoomLevel, setCurrentZoomLevel] = useState(1)
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const tooltipRef = useRef<HTMLDivElement>(null)
+  const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isApplyingZoomRef = useRef(false)
   
-  // Initialize zoom controls
-  const { setupZoom, handleZoomIn, handleZoomOut, handleResetView } = useNetworkZoom(svgRef, containerGroupRef)
+  // Initialize persona network bounds calculation hook
+  const { calculateNetworkBounds, createNodeSizeScale, getNodeSize } = usePersonaNetworkBounds(nodes, containerGroupRef)
+
+  // Initialize zoom controls with bounds calculator
+  const { setupZoom, handleZoomIn, handleZoomOut, handleResetView } = useNetworkZoom(svgRef, containerGroupRef, calculateNetworkBounds)
 
   // Tooltip functions
   const showTooltip = useCallback((event: any, node: PersonaNode) => {
@@ -225,27 +228,35 @@ export function PersonaNetworkVisualization({
     }
   }, [onZoomControlsReady, handleZoomIn, handleZoomOut, handleResetView, getCurrentTransform])
 
-  // Apply zoom after simulation settles
+  // Apply zoom after simulation settles with debouncing
   const applyZoomAfterSimulation = useCallback(() => {
-    if (!svgRef.current) return
+    if (!svgRef.current || isApplyingZoomRef.current || !isFirstLoad) return
     
-    const svg = d3.select(svgRef.current)
-    
-    if (preservedTransform && !isFirstLoad) {
-      console.log("Applying preserved transform:", preservedTransform)
-      svg.transition()
-        .duration(300)
-        .call(d3.zoom<SVGSVGElement, unknown>().transform, preservedTransform)
-      if (onTransformApplied) onTransformApplied()
-    } else {
-      console.log("Applying initial zoom: scale(0.5)")
-      const initialZoom = d3.zoomIdentity.scale(0.5)
-      svg.transition()
-        .duration(750)
-        .call(d3.zoom<SVGSVGElement, unknown>().transform, initialZoom)
-      setIsFirstLoad(false)
+    // Clear any pending zoom application
+    if (zoomTimeoutRef.current) {
+      clearTimeout(zoomTimeoutRef.current)
     }
-  }, [preservedTransform, onTransformApplied, isFirstLoad])
+    
+    // For initial load only, debounce the reset view call
+    zoomTimeoutRef.current = setTimeout(() => {
+      if (!isApplyingZoomRef.current) {
+        isApplyingZoomRef.current = true
+        // Wait for simulation to settle before applying reset
+        const checkAndReset = () => {
+          const bounds = calculateNetworkBounds()
+          if (bounds && bounds.width > 0 && bounds.height > 0) {
+            handleResetView()
+            setIsFirstLoad(false)
+            isApplyingZoomRef.current = false
+          } else {
+            // If bounds not ready, try again
+            setTimeout(checkAndReset, 100)
+          }
+        }
+        checkAndReset()
+      }
+    }, 200) // Longer delay to ensure simulation stability
+  }, [isFirstLoad, handleResetView, calculateNetworkBounds])
 
   // Initialize SVG and zoom behavior
   const initializeSVG = useCallback(() => {
@@ -352,46 +363,28 @@ export function PersonaNetworkVisualization({
     }
   }, [])
 
-  // Create node size scale
-  const createNodeSizeScale = useCallback((nodes: PersonaNode[], nodeType: PersonaNode['type']) => {
-    const nodesOfType = nodes.filter(n => n.type === nodeType && n.multiplicity && n.multiplicity > 0)
-    
-    if (nodesOfType.length === 0) {
-      return () => PERSONA_NODE_SIZE_CONFIG[nodeType].base
-    }
-    
-    const multiplicities = nodesOfType.map(n => n.multiplicity!)
-    const maxMultiplicity = Math.max(...multiplicities)
-    const minMultiplicity = Math.min(...multiplicities)
-    
-    // If all nodes have the same multiplicity, return base size
-    if (maxMultiplicity === minMultiplicity) {
-      return () => PERSONA_NODE_SIZE_CONFIG[nodeType].base
-    }
-    
-    // Use linear scale for personas (simpler than feedback network)
-    return d3.scaleLinear()
-      .domain([minMultiplicity, maxMultiplicity])
-      .range([PERSONA_NODE_SIZE_CONFIG[nodeType].min, PERSONA_NODE_SIZE_CONFIG[nodeType].max])
-      .clamp(true)
-  }, [])
+  // Helper functions are now provided by usePersonaNetworkBounds hook
 
-  // Get node size
-  const getNodeSize = (node: PersonaNode, sizeScale: (mult: number) => number) => {
-    if (!node.multiplicity || node.multiplicity <= 0) {
-      return PERSONA_NODE_SIZE_CONFIG[node.type].base
-    }
-    return sizeScale(node.multiplicity)
-  }
+  // Function to update only node styling (without restarting simulation)
+  const updateNodeStyling = useCallback(() => {
+    if (!containerGroupRef.current) return
+
+    const nodeGroup = containerGroupRef.current.select<SVGGElement>(".nodes-group")
+    if (nodeGroup.empty()) return
+
+    // Update circle styling
+    nodeGroup
+      .selectAll<SVGGElement, PersonaNode>(".persona-node-group")
+      .select("circle")
+      .attr("stroke", (d) => selectedNodeIds.has(d.id) ? "#ef4444" : "#fff")
+      .attr("stroke-width", (d) => selectedNodeIds.has(d.id) ? 3 : 2)
+  }, [selectedNodeIds])
 
   // Update network visualization
   const updateVisualization = useCallback(() => {
     if (!containerGroupRef.current || nodes.length === 0) {
-      console.log("No container group or nodes available for persona visualization")
       return
     }
-
-    console.log("Updating persona visualization with", nodes.length, "nodes and", links.length, "links")
 
     const g = containerGroupRef.current
 
@@ -472,6 +465,9 @@ export function PersonaNetworkVisualization({
                 if (!event.active && newSimulation) newSimulation.alphaTarget(0.3).restart()
                 d.fx = d.x
                 d.fy = d.y
+                // Store initial position to detect if this was a click or drag
+                event.sourceEvent.dragStartX = event.x
+                event.sourceEvent.dragStartY = event.y
               })
               .on("drag", (event, d) => {
                 d.fx = event.x
@@ -479,11 +475,33 @@ export function PersonaNetworkVisualization({
               })
               .on("end", (event, d) => {
                 if (!event.active && newSimulation) newSimulation.alphaTarget(0)
+                
+                // Check if this was a click (minimal movement)
+                const dragStartX = event.sourceEvent.dragStartX || event.x
+                const dragStartY = event.sourceEvent.dragStartY || event.y
+                const dragDistance = Math.sqrt(
+                  Math.pow(event.x - dragStartX, 2) + Math.pow(event.y - dragStartY, 2)
+                )
+                
+
+                // If movement was minimal (less than 5 pixels), treat as click
+                if (dragDistance < 5) {
+                  // only add SelectedNodes for personas
+                  if(d.type == 'persona') {
+                    setSelectedNodeIds(prev => {
+                      const newSet = new Set(prev)
+                      if (newSet.has(d.id)) {
+                        newSet.delete(d.id)
+                      } else {
+                        newSet.add(d.id)
+                      }
+                      return newSet
+                    })
+                  }
+                  if (onNodeClick) onNodeClick(d)
+                }
               })
             )
-            .on("click", (event, d) => {
-              if (onNodeClick) onNodeClick(d)
-            })
             .on("mouseenter", (event, d) => {
               showTooltip(event, d)
               if (onNodeHover) onNodeHover(d)
@@ -498,8 +516,6 @@ export function PersonaNetworkVisualization({
 
           // Append circle (background/border)
           nodeEnterGroup.append("circle")
-            .attr("stroke", "#fff")
-            .attr("stroke-width", 2)
 
           // Append image overlay for persona nodes only
           nodeEnterGroup.append("image")
@@ -536,6 +552,8 @@ export function PersonaNetworkVisualization({
           : PERSONA_NODE_SIZE_CONFIG.attribute.base
       })
       .attr("fill", (d) => d.color || getPersonaNodeColor(d.type))
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2)
 
     // Update node images (only for persona nodes)
     node.select(".persona-node-image")
@@ -624,13 +642,25 @@ export function PersonaNetworkVisualization({
   // Update visualization when data changes
   useEffect(() => {
     updateVisualization()
-  }, [nodes, links, layout, width, height])
+    // Apply styling after visualization is complete (without creating dependency loop)
+    setTimeout(() => {
+      updateNodeStyling()
+    }, 100)
+  }, [updateVisualization])
+
+  // Update only node styling when selection changes (without restarting simulation)
+  useEffect(() => {
+    updateNodeStyling()
+  }, [updateNodeStyling])
 
   // Cleanup
   useEffect(() => {
     return () => {
       if (simulation) {
         simulation.stop()
+      }
+      if (zoomTimeoutRef.current) {
+        clearTimeout(zoomTimeoutRef.current)
       }
       hideTooltip()
     }

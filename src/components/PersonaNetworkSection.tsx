@@ -36,17 +36,9 @@ export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionP
   // Process the raw CSV data into persona network format
   const processNetworkData = useCallback(() => {
     if (isLoading || error || !nodesData.length || !edgesData.length) {
-      console.log("Skipping persona network data processing", { 
-        isLoading, 
-        error, 
-        nodesCount: nodesData.length, 
-        edgesCount: edgesData.length 
-      })
       setNetworkData(null)
       return
     }
-
-    console.log("Processing persona network data...")
     const processedData = processPersonaNetworkData(nodesData, edgesData)
     setNetworkData(processedData)
   }, [nodesData, edgesData, dataSource, isLoading, error, processPersonaNetworkData])
@@ -58,43 +50,84 @@ export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionP
     handleResetView: () => void
     getCurrentTransform?: () => any
   } | null>(null)
-  const [preservedTransform, setPreservedTransform] = useState<any>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isRefreshingRef = useRef(false)
 
   // Process data when raw data changes
   useEffect(() => {
     processNetworkData()
   }, [processNetworkData])
 
-  // Clear preserved transform on component mount to ensure initial zoom works
-  useEffect(() => {
-    setPreservedTransform(null)
+
+  // Track container dimensions with debouncing
+  useLayoutEffect(() => {
+    let resizeTimeout: NodeJS.Timeout
+    
+    const updateDimensions = () => {
+      if (containerRef.current && !isRefreshingRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        const newWidth = rect.width || 800
+        const newHeight = rect.height || 600
+        
+        // Only update if dimensions actually changed significantly
+        setDimensions(prev => {
+          if (Math.abs(prev.width - newWidth) > 10 || Math.abs(prev.height - newHeight) > 10) {
+            return { width: newWidth, height: newHeight }
+          }
+          return prev
+        })
+      }
+    }
+
+    const debouncedUpdate = () => {
+      clearTimeout(resizeTimeout)
+      resizeTimeout = setTimeout(updateDimensions, 100)
+    }
+
+    updateDimensions()
+    
+    const resizeObserver = new ResizeObserver(debouncedUpdate)
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
+    return () => {
+      clearTimeout(resizeTimeout)
+      resizeObserver.disconnect()
+    }
   }, [])
 
-  // Handle refresh - just force re-render of visualization without data reload
+  // Handle refresh - trigger re-render without resetting view
   const handleRefreshData = useCallback(() => {
-    // Preserve current view transform before refresh
-    if (zoomControls?.getCurrentTransform) {
-      const currentTransform = zoomControls.getCurrentTransform()
-      setPreservedTransform(currentTransform)
-    }
+    isRefreshingRef.current = true
     
-    // Force re-render of the visualization component only
-    setRefreshKey(prev => prev + 1)
-  }, [zoomControls])
+    // Trigger a re-render by briefly toggling and restoring the same-persona links state
+    // This forces the visualization to update without changing the actual data displayed
+    const currentShowSamePersonaLinks = showSamePersonaLinks
+    setShowSamePersonaLinks(!currentShowSamePersonaLinks)
+    
+    // Restore the original state immediately to maintain user preference
+    setTimeout(() => {
+      setShowSamePersonaLinks(currentShowSamePersonaLinks)
+    }, 0)
+    
+    // Reset refresh flag after a delay
+    setTimeout(() => {
+      isRefreshingRef.current = false
+    }, 100)
+  }, [showSamePersonaLinks])
 
   const handleNodeClick = useCallback((node: PersonaNode) => {
-    console.log("Persona node clicked:", node)
     // Add your persona node click logic here
   }, [])
 
   const handleNodeHover = useCallback((node: PersonaNode | null) => {
-    console.log("Persona node hovered:", node)
     // Add your persona node hover logic here
   }, [])
 
   return (
-    <div className={`w-full h-full bg-gradient-to-br from-purple-50 to-cyan-50 rounded-lg p-4 relative overflow-hidden ${className}`}>
+    <div ref={containerRef} className={`w-full h-full bg-gradient-to-br from-purple-50 to-cyan-50 rounded-lg p-4 relative overflow-hidden ${className}`}>
       {/* Top Controls */}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
         <Button
@@ -166,17 +199,14 @@ export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionP
           </div>
 
           <PersonaNetworkVisualization
-            key={refreshKey}
             nodes={getFilteredPersonaData(networkData, showSamePersonaLinks).nodes}
             links={getFilteredPersonaData(networkData, showSamePersonaLinks).links}
             layout={layout}
-            width={600}
-            height={400}
+            width={dimensions.width}
+            height={dimensions.height}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             onZoomControlsReady={setZoomControls}
-            preservedTransform={preservedTransform}
-            onTransformApplied={() => setPreservedTransform(null)}
           />
         </>
       )}

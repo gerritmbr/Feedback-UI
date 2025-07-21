@@ -153,6 +153,21 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
     handleResetView: () => void
   } | null>(null)
 
+  
+  // Memoize the callback that sets zoom controls
+  const handleZoomControlsReady = useCallback((controls: {
+    handleZoomIn: () => void
+    handleZoomOut: () => void
+    handleResetView: () => void
+  }) => {
+    // Only update if the controls actually change, though setZoomControls
+    // is safe to call even if the value is the same.
+    setZoomControls(controls)
+  }, [setZoomControls]) // setZoomControls is guaranteed to be stable by React, so this is effectively an empty dependency.
+
+
+
+
   const handleNodeClick = useCallback((node: Node) => {
     console.log("Node clicked:", node)
     // Add your node click logic here

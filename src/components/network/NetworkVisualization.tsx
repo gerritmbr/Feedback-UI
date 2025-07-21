@@ -91,8 +91,44 @@ export function NetworkVisualization({
   const [currentZoomLevel, setCurrentZoomLevel] = useState(1)
   const tooltipRef = useRef<HTMLDivElement>(null)
 
+
+  // Use a ref to ensure onZoomControlsReady is called only once
+  const zoomControlsSetRef = useRef(false)
+
   const { initializeSVG } = useD3Network(svgRef, containerGroupRef)
-  const { setupZoom, handleZoomIn, handleZoomOut, handleResetView } = useNetworkZoom(svgRef, containerGroupRef)
+  
+  // Function to calculate actual network bounds from current node positions
+  const calculateNetworkBounds = useCallback(() => {
+    if (!containerGroupRef.current || nodes.length === 0) return null
+    
+    const nodeGroup = containerGroupRef.current.select<SVGGElement>(".nodes-group")
+    if (nodeGroup.empty()) return null
+    
+    // Get all node positions
+    const nodePositions = nodes.map(node => ({
+      x: node.x || 0,
+      y: node.y || 0
+    }))
+    
+    if (nodePositions.length === 0) return null
+    
+    // Calculate bounds with reasonable node radius padding
+    const maxRadius = 50 // Reasonable default for regular network nodes
+    
+    const minX = Math.min(...nodePositions.map(p => p.x)) - maxRadius
+    const maxX = Math.max(...nodePositions.map(p => p.x)) + maxRadius
+    const minY = Math.min(...nodePositions.map(p => p.y)) - maxRadius
+    const maxY = Math.max(...nodePositions.map(p => p.y)) + maxRadius
+    
+    return {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY
+    }
+  }, [nodes])
+  
+  const { setupZoom, handleZoomIn, handleZoomOut, handleResetView } = useNetworkZoom(svgRef, containerGroupRef, calculateNetworkBounds)
 
   // Tooltip functions
   const showTooltip = useCallback((event: any, node: Node) => {
@@ -217,16 +253,18 @@ export function NetworkVisualization({
     return () => window.removeEventListener('resize', updateDimensions)
   }, [propWidth, propHeight])
 
-  // Expose zoom controls to parent component
+  // Expose zoom controls to parent component, but ensure it only happens once.
   useEffect(() => {
-    if (onZoomControlsReady && handleZoomIn && handleZoomOut && handleResetView) {
+    // Check if the controls are ready and if they haven't been set yet
+    if (onZoomControlsReady && handleZoomIn && handleZoomOut && handleResetView && !zoomControlsSetRef.current) {
       onZoomControlsReady({
         handleZoomIn,
         handleZoomOut,
         handleResetView
       })
+      zoomControlsSetRef.current = true; // Mark that controls have been set
     }
-  }, [onZoomControlsReady, handleZoomIn, handleZoomOut, handleResetView])
+  }, [onZoomControlsReady, handleZoomIn, handleZoomOut, handleResetView]);
 
   // Create per-category scaling for all node types
   const createPerCategoryNodeSizeScale = useCallback((nodes: Node[], nodeType: Node['type']) => {

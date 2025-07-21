@@ -1,0 +1,118 @@
+{
+  "The Hands-On Practitioner": [
+    {
+      "Id": "1",
+      "Name": "Lena Schmidt",
+      "Gender": "Female",
+      "Nationality": "German",
+      "Major": "Mechanical Engineering",
+      "Semester": 3
+    },
+    {
+      "Id": "2",
+      "Name": "David Lee",
+      "Gender": "Male",
+      "Nationality": "American",
+      "Major": "Industrial Engineering",
+      "Semester": 4
+    },
+    {
+      "Id": "3",
+      "Name": "Sofia Rodriguez",
+      "Gender": "Female",
+      "Nationality": "Spanish",
+      "Major": "Business Administration",
+      "Semester": 2
+    }
+  ],
+  "The Digital Flexibility Seeker": [
+    {
+      "Id": "4",
+      "Name": "Kenji Tanaka",
+      "Gender": "Male",
+      "Nationality": "Japanese",
+      "Major": "Business Administration",
+      "Semester": 5
+    },
+    {
+      "Id": "5",
+      "Name": "Aisha Khan",
+      "Gender": "Female",
+      "Nationality": "Indian",
+      "Major": "Law",
+      "Semester": 3
+    }
+  ],
+  "The Collaborative Team Player": [
+    {
+      "Id": "6",
+      "Name": "Carlos Rivera",
+      "Gender": "Male",
+      "Nationality": "Mexican",
+      "Major": "Mechanical Engineering",
+      "Semester": 2
+    },
+    {
+      "Id": "7",
+      "Name": "Emily Chen",
+      "Gender": "Female",
+      "Nationality": "Canadian",
+      "Major": "Industrial Engineering",
+      "Semester": 4
+    }
+  ],
+  "The Independent Achiever": [
+    {
+      "Id": "8",
+      "Name": "Max Müller",
+      "Gender": "Male",
+      "Nationality": "German",
+      "Major": "Law",
+      "Semester": 5
+    },
+    {
+      "Id": "9",
+      "Name": "Chloe Dubois",
+      "Gender": "Female",
+      "Nationality": "French",
+      "Major": "Mechanical Engineering",
+      "Semester": 3
+    }
+  ],
+  "The International Participant": [
+    {
+      "Id": "10",
+      "Name": "Omar Hassan",
+      "Gender": "Male",
+      "Nationality": "Egyptian",
+      "Major": "Industrial Engineering",
+      "Semester": 2
+    },
+    {
+      "Id": "11",
+      "Name": "Valentina Petrova",
+      "Gender": "Female",
+      "Nationality": "Russian",
+      "Major": "Business Administration",
+      "Semester": 1
+    }
+  ],
+  "The Structure & Clarity Seeker": [
+    {
+      "Id": "12",
+      "Name": "Anna Becker",
+      "Gender": "Female",
+      "Nationality": "German",
+      "Major": "Law",
+      "Semester": 1
+    },
+    {
+      "Id": "13",
+      "Name": "Benjamin Davies",
+      "Gender": "Male",
+      "Nationality": "Australian",
+      "Major": "Mechanical Engineering",
+      "Semester": 4
+    }
+  ]
+}
