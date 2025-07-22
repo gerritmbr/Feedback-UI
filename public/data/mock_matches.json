@@ -1,7 +1,7 @@
 {
   "The Hands-On Practitioner": [
     {
-      "Id": "1",
+      "id": "1",
       "Name": "Lena Schmidt",
       "Gender": "Female",
       "Nationality": "German",
@@ -9,7 +9,7 @@
       "Semester": 3
     },
     {
-      "Id": "2",
+      "id": "2",
       "Name": "David Lee",
       "Gender": "Male",
       "Nationality": "American",
@@ -17,7 +17,7 @@
       "Semester": 4
     },
     {
-      "Id": "3",
+      "id": "3",
       "Name": "Sofia Rodriguez",
       "Gender": "Female",
       "Nationality": "Spanish",
@@ -27,7 +27,7 @@
   ],
   "The Digital Flexibility Seeker": [
     {
-      "Id": "4",
+      "id": "4",
       "Name": "Kenji Tanaka",
       "Gender": "Male",
       "Nationality": "Japanese",
@@ -35,7 +35,7 @@
       "Semester": 5
     },
     {
-      "Id": "5",
+      "id": "5",
       "Name": "Aisha Khan",
       "Gender": "Female",
       "Nationality": "Indian",
@@ -45,7 +45,7 @@
   ],
   "The Collaborative Team Player": [
     {
-      "Id": "6",
+      "id": "6",
       "Name": "Carlos Rivera",
       "Gender": "Male",
       "Nationality": "Mexican",
@@ -53,7 +53,7 @@
       "Semester": 2
     },
     {
-      "Id": "7",
+      "id": "7",
       "Name": "Emily Chen",
       "Gender": "Female",
       "Nationality": "Canadian",
@@ -63,7 +63,7 @@
   ],
   "The Independent Achiever": [
     {
-      "Id": "8",
+      "id": "8",
       "Name": "Max Müller",
       "Gender": "Male",
       "Nationality": "German",
@@ -71,7 +71,7 @@
       "Semester": 5
     },
     {
-      "Id": "9",
+      "id": "9",
       "Name": "Chloe Dubois",
       "Gender": "Female",
       "Nationality": "French",
@@ -81,7 +81,7 @@
   ],
   "The International Participant": [
     {
-      "Id": "10",
+      "id": "10",
       "Name": "Omar Hassan",
       "Gender": "Male",
       "Nationality": "Egyptian",
@@ -89,7 +89,7 @@
       "Semester": 2
     },
     {
-      "Id": "11",
+      "id": "11",
       "Name": "Valentina Petrova",
       "Gender": "Female",
       "Nationality": "Russian",
@@ -99,7 +99,7 @@
   ],
   "The Structure & Clarity Seeker": [
     {
-      "Id": "12",
+      "id": "12",
       "Name": "Anna Becker",
       "Gender": "Female",
       "Nationality": "German",
@@ -107,7 +107,7 @@
       "Semester": 1
     },
     {
-      "Id": "13",
+      "id": "13",
       "Name": "Benjamin Davies",
       "Gender": "Male",
       "Nationality": "Australian",

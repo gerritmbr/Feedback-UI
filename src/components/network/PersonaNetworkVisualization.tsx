@@ -9,6 +9,12 @@ import { useD3Network } from "./hooks/useD3Network"
 import { useNetworkZoom } from "./hooks/useNetworkZoom"
 import { usePersonaNetworkBounds } from "./hooks/usePersonaNetworkBounds"
 
+// Action-based selection callback type
+type SelectionAction = {
+  nodeId: string;
+  action: 'add' | 'remove' | 'toggle';
+};
+
 interface PersonaNetworkVisualizationProps {
   nodes: PersonaNode[]
   links: PersonaLink[]
@@ -23,6 +29,8 @@ interface PersonaNetworkVisualizationProps {
     handleResetView: () => void
     getCurrentTransform?: () => any
   }) => void
+  selectedNodeIds: Set<string>
+  onNodeSelectionChange?: (action: SelectionAction) => void
 }
 
 // Node sizing constants for persona network
@@ -81,14 +89,25 @@ export function PersonaNetworkVisualization({
   height,
   onNodeClick,
   onNodeHover,
-  onZoomControlsReady
+  onZoomControlsReady,
+  selectedNodeIds,
+  onNodeSelectionChange
 }: PersonaNetworkVisualizationProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [simulation, setSimulation] = useState<d3.Simulation<PersonaNode, PersonaLink> | null>(null)
   const containerGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null)
   const [isFirstLoad, setIsFirstLoad] = useState(true)
   const [currentZoomLevel, setCurrentZoomLevel] = useState(1)
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
+  // selectedNodeIds is now passed as prop, no local state needed
+  
+  // Debug: Log when selectedNodeIds prop changes
+  useEffect(() => {
+    console.log('🔄 PersonaNetworkVisualization: selectedNodeIds prop changed:')
+    console.log('  New selectedNodeIds:', selectedNodeIds)
+    console.log('  Size:', selectedNodeIds?.size || 0)
+    console.log('  Array:', Array.from(selectedNodeIds || []))
+    console.log('---')
+  }, [selectedNodeIds])
   const tooltipRef = useRef<HTMLDivElement>(null)
   const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isApplyingZoomRef = useRef(false)
@@ -372,12 +391,14 @@ export function PersonaNetworkVisualization({
     const nodeGroup = containerGroupRef.current.select<SVGGElement>(".nodes-group")
     if (nodeGroup.empty()) return
 
+    const currentSelectedIds = selectedNodeIds || new Set()
+
     // Update circle styling
     nodeGroup
       .selectAll<SVGGElement, PersonaNode>(".persona-node-group")
       .select("circle")
-      .attr("stroke", (d) => selectedNodeIds.has(d.id) ? "#ef4444" : "#fff")
-      .attr("stroke-width", (d) => selectedNodeIds.has(d.id) ? 3 : 2)
+      .attr("stroke", (d) => currentSelectedIds.has(d.id) ? "#ef4444" : "#fff")
+      .attr("stroke-width", (d) => currentSelectedIds.has(d.id) ? 3 : 2)
   }, [selectedNodeIds])
 
   // Update network visualization
@@ -487,16 +508,21 @@ export function PersonaNetworkVisualization({
                 // If movement was minimal (less than 5 pixels), treat as click
                 if (dragDistance < 5) {
                   // only add SelectedNodes for personas
-                  if(d.type == 'persona') {
-                    setSelectedNodeIds(prev => {
-                      const newSet = new Set(prev)
-                      if (newSet.has(d.id)) {
-                        newSet.delete(d.id)
-                      } else {
-                        newSet.add(d.id)
-                      }
-                      return newSet
-                    })
+                  if(d.type === 'persona' && onNodeSelectionChange) {
+                    console.log('🔍 Node Click Debug:')
+                    console.log('  Clicked node ID:', d.id)
+                    console.log('  Current selectedNodeIds:', Array.from(selectedNodeIds || []))
+                    
+                    // Simply send toggle action - let parent handle the state logic
+                    const action: SelectionAction = {
+                      nodeId: d.id,
+                      action: 'toggle'
+                    };
+                    
+                    console.log('  Sending action:', action)
+                    onNodeSelectionChange(action)
+                    console.log('  ✅ Action sent to parent')
+                    console.log('---')
                   }
                   if (onNodeClick) onNodeClick(d)
                 }
@@ -632,7 +658,9 @@ export function PersonaNetworkVisualization({
       }, 1000)
     }
 
-  }, [nodes, links, layout, width, height, applyLayout, onNodeClick, onNodeHover, applyZoomAfterSimulation])
+  }, [nodes, links, layout, width, height, applyLayout, applyZoomAfterSimulation, onNodeSelectionChange])
+  // Removed onNodeClick, onNodeHover from dependencies to prevent unnecessary D3 re-initialization
+  // Added onNodeSelectionChange to capture updated callback reference
 
   // Initialize SVG
   useEffect(() => {

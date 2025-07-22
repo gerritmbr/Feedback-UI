@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useLayoutEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react"
 import { Button } from "@/src/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { PersonaNetworkVisualization } from "./network/PersonaNetworkVisualization"
@@ -11,11 +11,23 @@ import { usePersonaData, PersonaNode, PersonaLink, PersonaNetworkData } from "@/
 
 type LayoutType = "force" | "circular" | "hierarchical" | "grid"
 
+// Action-based selection callback type
+type SelectionAction = {
+  nodeId: string;
+  action: 'add' | 'remove' | 'toggle';
+};
+
 interface PersonaNetworkSectionProps {
   className?: string
+  selectedNodeIds: Set<string>
+  onNodeSelectionChange?: (action: SelectionAction) => void
 }
 
-export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionProps) {
+export function PersonaNetworkSection({ 
+  className = "",
+  selectedNodeIds,
+  onNodeSelectionChange
+}: PersonaNetworkSectionProps) {
   const [layout, setLayout] = useState<LayoutType>("force")
   const [networkData, setNetworkData] = useState<PersonaNetworkData | null>(null)
   const [showSamePersonaLinks, setShowSamePersonaLinks] = useState(false)
@@ -118,13 +130,41 @@ export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionP
     }, 100)
   }, [showSamePersonaLinks])
 
+  // Node interaction handlers - currently unused but kept for future extensibility
   const handleNodeClick = useCallback((node: PersonaNode) => {
-    // Add your persona node click logic here
+    // Reserved for future persona node click functionality
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Persona node clicked:', node.label);
+    }
   }, [])
 
   const handleNodeHover = useCallback((node: PersonaNode | null) => {
-    // Add your persona node hover logic here
+    // Reserved for future persona node hover functionality  
+    if (process.env.NODE_ENV === 'development' && node) {
+      console.log('Persona node hovered:', node.label);
+    }
   }, [])
+
+  // Stable callback for node selection actions
+  const stableOnNodeSelectionChange = useCallback((action: SelectionAction) => {
+    console.log('🔄 PersonaNetworkSection: stableOnNodeSelectionChange called')
+    console.log('  Received action:', action)
+    console.log('  onNodeSelectionChange exists:', !!onNodeSelectionChange)
+    
+    if (onNodeSelectionChange) {
+      console.log('  🚀 Calling parent onNodeSelectionChange')
+      onNodeSelectionChange(action)
+    } else {
+      console.log('  ⚠️ No onNodeSelectionChange callback provided!')
+    }
+    console.log('---')
+  }, [onNodeSelectionChange])
+
+  // Memoize filtered data to prevent unnecessary re-renders
+  const filteredPersonaData = useMemo(() => {
+    if (!networkData) return { nodes: [], links: [] }
+    return getFilteredPersonaData(networkData, showSamePersonaLinks)
+  }, [networkData, showSamePersonaLinks, getFilteredPersonaData])
 
   return (
     <div ref={containerRef} className={`w-full h-full bg-gradient-to-br from-purple-50 to-cyan-50 rounded-lg p-4 relative overflow-hidden ${className}`}>
@@ -199,14 +239,16 @@ export function PersonaNetworkSection({ className = "" }: PersonaNetworkSectionP
           </div>
 
           <PersonaNetworkVisualization
-            nodes={getFilteredPersonaData(networkData, showSamePersonaLinks).nodes}
-            links={getFilteredPersonaData(networkData, showSamePersonaLinks).links}
+            nodes={filteredPersonaData.nodes}
+            links={filteredPersonaData.links}
             layout={layout}
             width={dimensions.width}
             height={dimensions.height}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             onZoomControlsReady={setZoomControls}
+            selectedNodeIds={selectedNodeIds}
+            onNodeSelectionChange={stableOnNodeSelectionChange}
           />
         </>
       )}
