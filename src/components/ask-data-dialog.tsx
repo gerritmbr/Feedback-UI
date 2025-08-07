@@ -1,18 +1,21 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo, memo } from "react"
 import { Button } from "@/src/components/ui/button"
 import { Textarea } from "@/src/components/ui/textarea"
 import { Label } from "@/src/components/ui/label"
 import { Progress } from "@/src/components/ui/progress"
 import { Alert, AlertDescription } from "@/src/components/ui/alert"
+import { Badge } from "@/src/components/ui/badge"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog"
-import { Loader2, AlertCircle, CheckCircle2, RefreshCw, Clock } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2, RefreshCw, Clock, ChevronDown } from "lucide-react"
+import { usePersonaData } from "@/src/components/persona-data-context"
+import { usePersonaNetworkData } from "@/src/components/network/hooks/usePersonaNetworkData"
 
 // Types for API responses
 interface HypothesisTestResponse {
@@ -40,6 +43,102 @@ interface ProcessingProgress {
   progress: number
   estimatedTime?: number
 }
+
+// Helper function to truncate text
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength) + '...'
+}
+
+// PersonaDisplaySection Component
+const PersonaDisplaySection = memo(function PersonaDisplaySection() {
+  const [expanded, setExpanded] = useState(false)
+  const { selectedNodeIds, nodesData, edgesData, isLoading: personaDataLoading } = usePersonaData()
+  const { processPersonaNetworkData } = usePersonaNetworkData()
+
+  const selectedPersonaInfo = useMemo(() => {
+    console.log('🎭 PersonaDisplaySection: Processing persona data for dialog', {
+      personaDataLoading,
+      selectedNodeIds: Array.from(selectedNodeIds),
+      nodesCount: nodesData.length,
+      edgesCount: edgesData.length
+    })
+
+    if (personaDataLoading || !nodesData.length || !edgesData.length || selectedNodeIds.size === 0) {
+      return []
+    }
+
+    try {
+      // Process persona network data
+      const personaNetworkData = processPersonaNetworkData(nodesData, edgesData)
+      
+      if (!personaNetworkData?.nodes) return []
+
+      const personas = personaNetworkData.nodes
+        .filter(node => selectedNodeIds.has(node.id) && node.type === 'persona')
+        .map(node => ({
+          id: node.id,
+          label: node.label,
+          truncatedLabel: truncateText(node.label, 40)
+        }))
+
+      console.log('🎭 PersonaDisplaySection: Processed personas for dialog:', personas.length)
+      return personas
+    } catch (error) {
+      console.error('Error processing persona data for dialog:', error)
+      return []
+    }
+  }, [selectedNodeIds, nodesData, edgesData, personaDataLoading, processPersonaNetworkData])
+
+  const count = selectedPersonaInfo.length
+
+  // Hide entirely when no selection
+  if (count === 0) return null
+
+  // Show individual names (1-3 personas)
+  if (count <= 3) {
+    return (
+      <div className="mb-4 pb-3 border-b border-gray-200">
+        <h3 className="text-sm font-medium text-gray-700 mb-2">
+          Filtered by {count} persona{count > 1 ? 's' : ''}
+        </h3>
+        <ul className="space-y-1">
+          {selectedPersonaInfo.map(persona => (
+            <li key={persona.id} className="text-sm text-gray-600 flex items-center">
+              <Badge variant="secondary" className="mr-2 text-xs">P</Badge>
+              {persona.truncatedLabel}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  // Show compact count + expandable detail (4+ personas)
+  return (
+    <div className="mb-4 pb-3 border-b border-gray-200">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full text-left hover:bg-gray-50 rounded p-1 -m-1 transition-colors"
+      >
+        <span className="text-sm font-medium text-gray-700">
+          Filtered by {count} personas
+        </span>
+        <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {expanded && (
+        <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+          {selectedPersonaInfo.map(persona => (
+            <li key={persona.id} className="text-xs text-gray-500 pl-2">
+              • {persona.truncatedLabel}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+})
 
 export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
   const [dialogState, setDialogState] = useState<DialogState>('input')
@@ -208,6 +307,9 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
 
   const renderInputState = () => (
     <div className="space-y-4">
+      {/* Selected Personas Section */}
+      <PersonaDisplaySection />
+      
       <div>
         <Label htmlFor="hypothesis">What's your Hypothesis?</Label>
         <Textarea

@@ -11,6 +11,7 @@ export interface PersonaNode extends d3.SimulationNodeDatum {
   type: "persona" | "attribute"
   color: string
   multiplicity?: number
+  transcript_id?: string
 }
 
 export interface PersonaLink extends d3.SimulationLinkDatum<PersonaNode> {
@@ -36,6 +37,9 @@ interface PersonaDataContextType {
   uploadTimestamp: Date | null;
   refreshData: () => void;
   clearData: () => void;
+  // Persona selection state
+  selectedNodeIds: Set<string>;
+  setSelectedNodeIds: (ids: Set<string>) => void;
 }
 
 const PersonaDataContext = createContext<PersonaDataContextType | undefined>(undefined);
@@ -108,6 +112,8 @@ export const PersonaDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'none' | 'local' | 'server'>('none');
   const [uploadTimestamp, setUploadTimestamp] = useState<Date | null>(null);
+  // Persona selection state
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
 
   const loadData = async () => {
     setIsLoading(true);
@@ -162,6 +168,8 @@ export const PersonaDataProvider: React.FC<{ children: React.ReactNode }> = ({ c
     hasLocalData: dataSource === 'local',
     refreshData,
     clearData,
+    selectedNodeIds,
+    setSelectedNodeIds,
   };
 
   return (

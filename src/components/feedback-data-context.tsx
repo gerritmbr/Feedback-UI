@@ -40,6 +40,9 @@ interface FeedbackDataContextType {
   uploadTimestamp: Date | null;
   refreshData: () => void;
   clearData: () => void;
+  // Transcript filtering state
+  selectedTranscriptIds: string[];
+  setSelectedTranscriptIds: (ids: string[]) => void;
 }
 
 const FeedbackDataContext = createContext<FeedbackDataContextType | undefined>(undefined);
@@ -112,6 +115,8 @@ export const FeedbackDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'none' | 'local' | 'server'>('none');
   const [uploadTimestamp, setUploadTimestamp] = useState<Date | null>(null);
+  // Transcript filtering state
+  const [selectedTranscriptIds, setSelectedTranscriptIds] = useState<string[]>([]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -166,6 +171,8 @@ export const FeedbackDataProvider: React.FC<{ children: React.ReactNode }> = ({ 
     hasLocalData: dataSource === 'local',
     refreshData,
     clearData,
+    selectedTranscriptIds,
+    setSelectedTranscriptIds,
   };
 
   return (

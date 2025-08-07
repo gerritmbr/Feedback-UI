@@ -7,7 +7,8 @@ export function useNetworkFilter() {
   const getFilteredNetworkData = useCallback((
     networkData: NetworkData | null,
     selectedQuestions: string[],
-    showTranscriptLinks: boolean
+    showTranscriptLinks: boolean,
+    selectedTranscriptIds: string[] = []
   ) => {
     if (!networkData) {
       console.log("No network data available for filtering")
@@ -15,32 +16,72 @@ export function useNetworkFilter() {
     }
 
     console.log("Filtering network data for questions:", selectedQuestions)
+    console.log("Filtering network data for transcript IDs:", selectedTranscriptIds)
     console.log("Available nodes:", networkData.nodes.length)
 
-    if (selectedQuestions.length === 0) {
-      // If no specific questions are selected, return all nodes and links,
-      // respecting the 'showTranscriptLinks' toggle.
-      const allLinks = showTranscriptLinks
-        ? networkData.links
-        : networkData.links.filter((link: any) =>
-            link.type !== "same_transcript_answer" && link.type !== "same_transcript_reason"
-          )
-      return { nodes: networkData.nodes, links: allLinks }
+    // Helper function to check if node matches transcript filter
+    const matchesTranscriptFilter = (node: any): boolean => {
+      if (selectedTranscriptIds.length === 0) return true
+      
+      if (!node.transcript_id) return false
+      
+      // Handle pipe-separated transcript IDs (e.g., "1|2|3|4")
+      const nodeTranscriptIds = String(node.transcript_id)
+        .split('|')
+        .map(id => id.trim())
+        .filter(id => id.length > 0)
+      
+      // Check if any of the node's transcript IDs match selected ones
+      return nodeTranscriptIds.some(id => selectedTranscriptIds.includes(id))
     }
 
+    // Pre-filter all nodes by transcript IDs if transcript filtering is active
+    const transcriptFilteredNodes = selectedTranscriptIds.length > 0 
+      ? networkData.nodes.filter(matchesTranscriptFilter)
+      : networkData.nodes
+
+    console.log("Nodes after transcript filtering:", transcriptFilteredNodes.length)
+
+    if (selectedQuestions.length === 0) {
+      // If no specific questions are selected, return transcript-filtered nodes and links
+      const transcriptFilteredNodeIds = new Set(transcriptFilteredNodes.map(node => node.id))
+      
+      const filteredLinks = networkData.links.filter((link: any) => {
+        const sourceId = typeof link.source === "string" ? link.source : link.source.id
+        const targetId = typeof link.target === "string" ? link.target : link.target.id
+        
+        // Keep links where both nodes pass transcript filter
+        const keepLink = transcriptFilteredNodeIds.has(sourceId) && transcriptFilteredNodeIds.has(targetId)
+        
+        // Also respect showTranscriptLinks toggle
+        if (!showTranscriptLinks && (link.type === "same_transcript_answer" || link.type === "same_transcript_reason")) {
+          return false
+        }
+        
+        return keepLink
+      })
+      
+      return { nodes: transcriptFilteredNodes, links: filteredLinks }
+    }
+
+    // When both questions and transcript filtering are active, work with transcript-filtered dataset
+    const workingNodes = transcriptFilteredNodes
+    const workingNodeIds = new Set(workingNodes.map(node => node.id))
+    
     let connectedNodeIds = new Set<string>()
     let relevantLinks: Link[] = []
     let questionAnswerMap = new Map<string, Set<string>>() // Track which answers belong to which questions
 
     // --- Phase 1: Build the core subgraph based on selected questions and their direct answers ---
+    // Now working with transcript-filtered dataset
     let initialChanged = true
     while (initialChanged) {
       initialChanged = false
       const currentSize = connectedNodeIds.size
 
-      // Add selected questions if not already present
+      // Add selected questions if not already present AND they pass transcript filter
       selectedQuestions.forEach(qId => {
-        if (!connectedNodeIds.has(qId)) {
+        if (!connectedNodeIds.has(qId) && workingNodeIds.has(qId)) {
           connectedNodeIds.add(qId)
           initialChanged = true
         }
@@ -54,7 +95,9 @@ export function useNetworkFilter() {
         // Only consider "question_to_answer" links for this phase
         if (link.type === "question_to_answer") {
           // If the source (question) is connected, and the target (answer) is not, add the target and the link
-          if (connectedNodeIds.has(sourceId) && !connectedNodeIds.has(targetId)) {
+          // BUT only if both nodes pass transcript filter
+          if (connectedNodeIds.has(sourceId) && !connectedNodeIds.has(targetId) && 
+              workingNodeIds.has(sourceId) && workingNodeIds.has(targetId)) {
             connectedNodeIds.add(targetId)
             if (!relevantLinks.includes(link)) {
               relevantLinks.push(link)
@@ -68,8 +111,9 @@ export function useNetworkFilter() {
             
             initialChanged = true
           }
-          // If both source and target are already connected, ensure the link is added
-          else if (connectedNodeIds.has(sourceId) && connectedNodeIds.has(targetId)) {
+          // If both source and target are already connected AND pass transcript filter, ensure the link is added
+          else if (connectedNodeIds.has(sourceId) && connectedNodeIds.has(targetId) && 
+                   workingNodeIds.has(sourceId) && workingNodeIds.has(targetId)) {
             if (!relevantLinks.includes(link)) {
               relevantLinks.push(link)
             }
@@ -86,7 +130,7 @@ export function useNetworkFilter() {
     // --- Extract question_ids from selected question nodes ---
     const selectedQuestionIds = new Set<string>()
     selectedQuestions.forEach(questionNodeId => {
-      const questionNode = networkData.nodes.find((node: any) => node.id === questionNodeId && node.type === "question")
+      const questionNode = workingNodes.find((node: any) => node.id === questionNodeId && node.type === "question")
       if (questionNode && questionNode.question_ids) {
         // Handle both string and array formats for question_ids
         const questionQIDs = Array.isArray(questionNode.question_ids)
@@ -109,9 +153,9 @@ export function useNetworkFilter() {
         const answerBelongsToSelectedQuestion = Array.from(questionAnswerMap.values())
           .some(answerSet => answerSet.has(sourceId))
         
-        if (answerBelongsToSelectedQuestion && !connectedNodeIds.has(targetId)) {
+        if (answerBelongsToSelectedQuestion && !connectedNodeIds.has(targetId) && workingNodeIds.has(targetId)) {
           // Get the reason node to check its question_ids
-          const reasonNode = networkData.nodes.find((node: any) => node.id === targetId)
+          const reasonNode = workingNodes.find((node: any) => node.id === targetId)
           if (reasonNode && reasonNode.question_ids) {
             // reasonNode.question_ids can be a string (from CSV) or an array
             const reasonQIDs = Array.isArray(reasonNode.question_ids)
@@ -165,7 +209,8 @@ export function useNetworkFilter() {
     }
 
     // Final filtering based on the accumulated connectedNodeIds and relevantLinks
-    const filteredNodes = networkData.nodes.filter((node: any) =>
+    // Only include nodes that both pass transcript filter AND are in the connected set
+    const filteredNodes = workingNodes.filter((node: any) =>
       connectedNodeIds.has(node.id)
     )
 

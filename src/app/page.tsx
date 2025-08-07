@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useCallback} from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { QuestionsSection } from "@/src/components/questions-section"
 // import { NetworkSection } from "@/src/components/network-section"
-import { FeedbackDataProvider} from "@/src/components/feedback-data-context"
+import { FeedbackDataProvider, useFeedbackData} from "@/src/components/feedback-data-context"
 import { ReportDataProvider } from "@/src/components/report-data-context"
 import { StatisticsSection } from "@/src/components/statistics-section"
 import { PersonaSection } from "@/src/components/persona-section"
@@ -11,15 +11,39 @@ import { FeedbackNetworkSection } from "@/src/components/feedback-network-sectio
 import Header from "@/src/components/dashboard-header"
 import { SuccessBanner } from "@/src/components/success-banner"
 import { useReportData } from "@/src/components/report-data-context"
+import { usePersonaTranscriptFilter } from "@/src/hooks/usePersonaTranscriptFilter"
+import { PersonaNetworkData, usePersonaData, PersonaDataProvider } from "@/src/components/persona-data-context"
 
 function DashboardContent() {
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>(["1", "2", "3", "4"])
+  const [personaNetworkData, setPersonaNetworkData] = useState<PersonaNetworkData | null>(null)
   const { showSuccessBanner } = useReportData();
+  const { setSelectedTranscriptIds } = useFeedbackData();
+  const { selectedNodeIds: selectedPersonaNodeIds, setSelectedNodeIds: setSelectedPersonaNodeIds } = usePersonaData();
+
+  // Extract transcript IDs from selected personas
+  const { transcriptIds } = usePersonaTranscriptFilter(selectedPersonaNodeIds, personaNetworkData)
+  
+  // Update context whenever transcript IDs change
+  useEffect(() => {
+    console.log('🔄 Dashboard: Updating FeedbackDataContext with transcript IDs:', transcriptIds)
+    setSelectedTranscriptIds(transcriptIds)
+  }, [transcriptIds, setSelectedTranscriptIds])
 
   const handleQuestionToggle = useCallback((questionIds: string[]) => { // <-- START handleQuestionToggle CALLBACK
     console.log("Dashboard received question toggle:", questionIds)
     setSelectedQuestions(questionIds)
   }, []) // <-- END handleQuestionToggle CALLBACK
+
+  const handlePersonaSelectionChange = useCallback((selectedNodeIds: Set<string>) => {
+    console.log("Dashboard received persona selection change:", Array.from(selectedNodeIds))
+    setSelectedPersonaNodeIds(selectedNodeIds)
+  }, [setSelectedPersonaNodeIds])
+
+  const handlePersonaNetworkDataChange = useCallback((networkData: PersonaNetworkData | null) => {
+    console.log("Dashboard received persona network data change")
+    setPersonaNetworkData(networkData)
+  }, [])
 
   const handleDataUploaded = useCallback(() => { // <-- START handleDataUploaded CALLBACK
     console.log('Data uploaded - refresh your visualizations or data state');
@@ -36,12 +60,16 @@ function DashboardContent() {
         <div className="flex flex-col lg:flex-row gap-6 flex-1">
           {/* Network Section - Now takes 2/3 width on large screens */}
           <div className="flex-1 lg:flex-[2] min-h-[300px] max-h-[90vh]">
-            <FeedbackNetworkSection selectedQuestions={selectedQuestions} />
+            <FeedbackNetworkSection 
+              selectedQuestions={selectedQuestions}
+            />
           </div>
 
           {/* Questions Section - Now takes 1/3 width on large screens */}
           <div className="flex-1 lg:flex-[1] min-h-[300px] max-h-[90vh] overflow-auto">
-            <QuestionsSection onQuestionToggle={handleQuestionToggle} />
+            <QuestionsSection 
+              onQuestionToggle={handleQuestionToggle}
+            />
           </div>
         </div>
 
@@ -52,7 +80,10 @@ function DashboardContent() {
 
         {/* Persona section */}
         <div className="w-full">
-          <PersonaSection />
+          <PersonaSection 
+            onSelectionChange={handlePersonaSelectionChange}
+            onNetworkDataChange={handlePersonaNetworkDataChange}
+          />
         </div>
       </div>
       
@@ -64,10 +95,12 @@ function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <FeedbackDataProvider>
-      <ReportDataProvider>
-        <DashboardContent />
-      </ReportDataProvider>
-    </FeedbackDataProvider>
+    <PersonaDataProvider>
+      <FeedbackDataProvider>
+        <ReportDataProvider>
+          <DashboardContent />
+        </ReportDataProvider>
+      </FeedbackDataProvider>
+    </PersonaDataProvider>
   );
 }

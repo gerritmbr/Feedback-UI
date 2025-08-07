@@ -22,13 +22,14 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/src/components/ui/card";
-import { PersonaDataProvider, usePersonaData } from "@/src/components/persona-data-context";
+import { usePersonaData } from "@/src/components/persona-data-context";
 import { PersonaNetworkSection } from "./PersonaNetworkSection";
 import { MatchButton } from "@/src/components/match-button";
 import { MatchPopup } from "@/src/components/match-popup";
 import { AskDataButton } from "@/src/components/ask-data-button";
 import { AskDataDialog } from "@/src/components/ask-data-dialog";
 import { usePersonaNetworkData } from "./network/hooks/usePersonaNetworkData";
+import { PersonaNetworkData } from "@/src/components/persona-data-context";
 
 // Action-based selection callback type
 type SelectionAction = {
@@ -57,6 +58,12 @@ type ErrorState = {
   retryCount: number;
 };
 
+// Props interface for PersonaSection callbacks
+interface PersonaSectionProps {
+  onSelectionChange?: (selectedNodeIds: Set<string>) => void;
+  onNetworkDataChange?: (networkData: PersonaNetworkData | null) => void;
+}
+
 /**
  * PersonaSectionContent - Core component with data management
  * 
@@ -67,18 +74,21 @@ type ErrorState = {
  * - Filtering logic based on selected personas
  * - Error display and recovery mechanisms
  */
-function PersonaSectionContent() {
+function PersonaSectionContent({ onSelectionChange, onNetworkDataChange }: PersonaSectionProps) {
   const [isMatchPopupOpen, setIsMatchPopupOpen] = useState(false);
   const [isAskDataDialogOpen, setIsAskDataDialogOpen] = useState(false);
   const [matchData, setMatchData] = useState<Match[]>([]);
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  
+  // Use context state instead of local state
+  const { selectedNodeIds, setSelectedNodeIds } = usePersonaData();
   
   // Debug: Log when selectedNodeIds state changes
   useEffect(() => {
-    console.log('🔄 PersonaSection: selectedNodeIds STATE changed:')
+    console.log('🔄 PersonaSection: selectedNodeIds CONTEXT STATE changed:')
     console.log('  New state:', selectedNodeIds)
     console.log('  Size:', selectedNodeIds.size)
     console.log('  Array:', Array.from(selectedNodeIds))
+    console.log('  Context state shared with Dialog!')
     console.log('---')
   }, [selectedNodeIds]);
 
@@ -184,6 +194,14 @@ function PersonaSectionContent() {
     fetchMatchData();
   }, [fetchMatchData]);
 
+  // Notify parent about selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(selectedNodeIds);
+    }
+  }, [selectedNodeIds, onSelectionChange]);
+
+
   // Process persona network data to get PersonaNode objects with error handling
   const [processingError, setProcessingError] = useState<string | null>(null);
   
@@ -206,6 +224,13 @@ function PersonaSectionContent() {
       return null;
     }
   }, [nodesData, edgesData, dataLoading, dataError, processPersonaNetworkData]);
+
+  // Notify parent about network data changes
+  useEffect(() => {
+    if (onNetworkDataChange) {
+      onNetworkDataChange(personaNetworkData);
+    }
+  }, [personaNetworkData, onNetworkDataChange]);
 
   // Enhanced filtering with validation and user feedback
   const filteredMatchData = useMemo(() => {
@@ -375,10 +400,11 @@ function PersonaSectionContent() {
  * - Data processing happens at the appropriate level
  * - State management is centralized and predictable
  */
-export function PersonaSection() {
+export function PersonaSection({ onSelectionChange, onNetworkDataChange }: PersonaSectionProps = {}) {
   return (
-    <PersonaDataProvider>
-      <PersonaSectionContent />
-    </PersonaDataProvider>
+    <PersonaSectionContent 
+      onSelectionChange={onSelectionChange}
+      onNetworkDataChange={onNetworkDataChange}
+    />
   );
 }

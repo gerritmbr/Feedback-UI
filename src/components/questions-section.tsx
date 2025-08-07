@@ -56,7 +56,8 @@ export function QuestionsSection({ onQuestionToggle }: QuestionsSectionProps) {
     edgesData,
     isLoading,
     error,
-    refreshData
+    refreshData,
+    selectedTranscriptIds
   } = useFeedbackData();
 
   // Process data from context whenever nodesData or edgesData change
@@ -109,9 +110,30 @@ export function QuestionsSection({ onQuestionToggle }: QuestionsSectionProps) {
       console.log("Processed nodes count from context:", processedNodes.length)
       console.log("Processed edges count from context:", processedEdges.length)
 
+      // Apply transcript filtering if selectedTranscriptIds is provided
+      const transcriptFilteredNodes = selectedTranscriptIds.length > 0 
+        ? processedNodes.filter((node) => {
+            if (!node.transcript_id) return false
+            
+            // Handle pipe-separated transcript IDs (e.g., "1|2|3|4")
+            const nodeTranscriptIds = String(node.transcript_id)
+              .split('|')
+              .map(id => id.trim())
+              .filter(id => id.length > 0)
+            
+            // Check if any of the node's transcript IDs match selected ones
+            return nodeTranscriptIds.some(id => selectedTranscriptIds.includes(id))
+          })
+        : processedNodes
+
+      console.log("Nodes after transcript filtering:", transcriptFilteredNodes.length)
+      if (selectedTranscriptIds.length > 0) {
+        console.log("Transcript filter active for IDs:", selectedTranscriptIds)
+      }
+
       // Filter nodes by type
-      const questionNodes = processedNodes.filter((node) => node.type === "question");
-      const answerNodes = processedNodes.filter((node) => node.type === "answer");
+      const questionNodes = transcriptFilteredNodes.filter((node) => node.type === "question");
+      const answerNodes = transcriptFilteredNodes.filter((node) => node.type === "answer");
 
       console.log("Question nodes from context:", questionNodes.length);
       console.log("Answer nodes from context:", answerNodes.length);
@@ -179,7 +201,7 @@ export function QuestionsSection({ onQuestionToggle }: QuestionsSectionProps) {
       setQuestions([]);
       setCategoryGroups([]);
     }
-  }, [nodesData, edgesData, isLoading, error, onQuestionToggle]);
+  }, [nodesData, edgesData, isLoading, error, onQuestionToggle, selectedTranscriptIds]);
 
   // Group questions by category
   const groupQuestionsByCategory = (questions: Question[]): CategoryGroup[] => {

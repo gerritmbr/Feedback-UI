@@ -30,7 +30,8 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
     isLoading, 
     error, 
     dataSource, 
-    refreshData 
+    refreshData,
+    selectedTranscriptIds
   } = useFeedbackData()
 
   const { getFilteredNetworkData } = useNetworkFilter()
@@ -49,6 +50,7 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
     }
 
     console.log("Processing network data...")
+    console.log("Selected transcript IDs from context:", selectedTranscriptIds)
     console.log("Raw nodes data sample:", nodesData.slice(0, 3))
     console.log("Raw edges data sample:", edgesData.slice(0, 3))
     console.log("Data source:", dataSource)
@@ -57,8 +59,26 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
     console.log("Nodes CSV columns:", Object.keys(nodesData[0]))
     console.log("Edges CSV columns:", Object.keys(edgesData[0]))
     
+    // Apply transcript filtering to raw nodes data if transcript filtering is active
+    const filteredNodesData = selectedTranscriptIds.length > 0 
+      ? nodesData.filter((d) => {
+          if (!d.transcript_id) return false
+          
+          // Handle pipe-separated transcript IDs (e.g., "1|10|11|12|2|3|4|5|6|7|8|9")
+          const nodeTranscriptIds = String(d.transcript_id)
+            .split('|')
+            .map(id => id.trim())
+            .filter(id => id.length > 0)
+          
+          // Check if any of the node's transcript IDs match selected ones
+          return nodeTranscriptIds.some(id => selectedTranscriptIds.includes(id))
+        })
+      : nodesData
+
+    console.log(`Nodes after transcript filtering: ${filteredNodesData.length}/${nodesData.length}`)
+
     // Process nodes data
-    const nodes: Node[] = nodesData.map((d, index) => {
+    const nodes: Node[] = filteredNodesData.map((d, index) => {
       const node = {
         id: d.Id || d.id || `node_${index}`,
         label: d.Label,
@@ -113,7 +133,7 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
 
     setNetworkData(processedData)
     console.log("Network data processed successfully")
-  }, [nodesData, edgesData, dataSource, isLoading, error])
+  }, [nodesData, edgesData, dataSource, isLoading, error, selectedTranscriptIds])
 
   // Helper function for default colors based on node type
   const getDefaultColor = (nodeType: string): string => {
@@ -134,11 +154,12 @@ export function FeedbackNetworkSection({ selectedQuestions = [], className = "" 
     processNetworkData()
   }, [processNetworkData])
 
-  // Get filtered network data
+  // Get filtered network data (transcript filtering already applied at context level)
   const { nodes: filteredNodes, links: filteredLinks } = getFilteredNetworkData(
     networkData,
     selectedQuestions,
-    showTranscriptLinks
+    showTranscriptLinks,
+    [] // Empty array since transcript filtering is now done at context level
   )
 
   // Handle refresh

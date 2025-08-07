@@ -25,23 +25,38 @@ export function usePersonaNetworkData() {
     console.log("Persona nodes CSV columns:", Object.keys(nodesData[0] || {}))
     console.log("Persona edges CSV columns:", Object.keys(edgesData[0] || {}))
     
-    // Process persona nodes data
-    const nodes: PersonaNode[] = nodesData.map((d, index) => {
-      const node = {
-        id: d.Id || d.id || `persona_node_${index}`,
-        label: d.Label || d.label || '',
-        content: d.content || '',
-        type: (d.node_type || d.type || "attribute") as "persona" | "attribute",
-        color: d.color || getDefaultPersonaColor(d.node_type || d.type),
-        multiplicity: d.node_multiplicity ? Number.parseInt(d.node_multiplicity) : undefined,
-      }
-      
-      if (!node.id) {
-        console.warn(`Persona node at index ${index} missing ID:`, d)
-      }
-      
-      return node
-    })
+    // Process persona nodes data, filtering out empty rows
+    const nodes: PersonaNode[] = nodesData
+      .filter((d, index) => {
+        // Filter out empty or invalid rows
+        const hasId = d.Id || d.id
+        const hasLabel = d.Label || d.label
+        const isEmpty = !hasId && !hasLabel
+        
+        if (isEmpty) {
+          console.log(`Skipping empty persona node at index ${index}:`, d)
+          return false
+        }
+        
+        return true
+      })
+      .map((d, index) => {
+        const node = {
+          id: d.Id || d.id || `persona_node_${index}`,
+          label: d.Label || d.label || '',
+          content: d.content || '',
+          type: (d.node_type || d.type || "attribute") as "persona" | "attribute",
+          color: d.color || getDefaultPersonaColor(d.node_type || d.type),
+          multiplicity: d.node_multiplicity ? Number.parseInt(d.node_multiplicity) : undefined,
+          transcript_id: d.transcript_id || undefined,
+        }
+        
+        if (!node.id) {
+          console.warn(`Persona node at index ${index} missing ID:`, d)
+        }
+        
+        return node
+      })
 
     // Process persona edges data
     const edges: PersonaLink[] = edgesData.map((d, index) => {
