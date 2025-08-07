@@ -1,0 +1,383 @@
+"use client"
+
+import { useState, useCallback } from "react"
+import { Button } from "@/src/components/ui/button"
+import { Textarea } from "@/src/components/ui/textarea"
+import { Label } from "@/src/components/ui/label"
+import { Progress } from "@/src/components/ui/progress"
+import { Alert, AlertDescription } from "@/src/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/src/components/ui/dialog"
+import { Loader2, AlertCircle, CheckCircle2, RefreshCw, Clock } from "lucide-react"
+
+// Types for API responses
+interface HypothesisTestResponse {
+  result: string
+  connectionFound: boolean
+  processingTime: number
+  cached: boolean
+}
+
+interface APIErrorResponse {
+  error: 'RATE_LIMITED' | 'INVALID_INPUT' | 'CLAUDE_API_ERROR' | 'TIMEOUT' | 'INTERNAL_ERROR' | 'SERVICE_UNAVAILABLE'
+  message: string
+  retryAfter?: number
+}
+
+interface AskDataDialogProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+type DialogState = 'input' | 'processing' | 'results' | 'error'
+
+interface ProcessingProgress {
+  step: string
+  progress: number
+  estimatedTime?: number
+}
+
+export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
+  const [dialogState, setDialogState] = useState<DialogState>('input')
+  const [hypothesis, setHypothesis] = useState('')
+  const [results, setResults] = useState<HypothesisTestResponse | null>(null)
+  const [error, setError] = useState<APIErrorResponse | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [processingProgress, setProcessingProgress] = useState<ProcessingProgress>({ step: 'Initializing...', progress: 0 })
+
+  const simulateProgress = useCallback(() => {
+    const steps = [
+      { step: 'Validating hypothesis...', progress: 10 },
+      { step: 'Loading reference data...', progress: 25 },
+      { step: 'Analyzing with Claude AI...', progress: 60 },
+      { step: 'Processing results...', progress: 85 },
+      { step: 'Finalizing...', progress: 95 }
+    ]
+
+    let currentStep = 0
+    const interval = setInterval(() => {
+      if (currentStep < steps.length) {
+        setProcessingProgress(steps[currentStep])
+        currentStep++
+      } else {
+        clearInterval(interval)
+        setProcessingProgress({ step: 'Complete', progress: 100 })
+      }
+    }, 800)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleSubmit = async () => {
+    if (!hypothesis.trim() || isSubmitting) return
+    
+    setIsSubmitting(true)
+    setDialogState('processing')
+    setError(null)
+    setResults(null)
+    
+    // Start progress simulation
+    const cleanup = simulateProgress()
+    
+    try {
+      const response = await fetch('/api/hypothesis-test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ hypothesis: hypothesis.trim() })
+      })
+
+      const data = await response.json()
+      
+      cleanup() // Stop progress simulation
+      
+      if (!response.ok) {
+        const errorData = data as APIErrorResponse
+        setError(errorData)
+        setDialogState('error')
+        return
+      }
+
+      const resultData = data as HypothesisTestResponse
+      setResults(resultData)
+      setDialogState('results')
+      
+    } catch (err) {
+      cleanup() // Stop progress simulation
+      
+      // Handle network or parsing errors
+      setError({
+        error: 'INTERNAL_ERROR',
+        message: 'Failed to connect to the analysis service. Please check your connection and try again.'
+      })
+      setDialogState('error')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleClose = () => {
+    setDialogState('input')
+    setHypothesis('')
+    setResults(null)
+    setError(null)
+    setIsSubmitting(false)
+    onClose()
+  }
+
+  const handleRetry = () => {
+    setError(null)
+    setDialogState('input')
+  }
+
+  const formatMarkdown = (text: string) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
+      .replace(/\n\n/g, '</p><p class="mt-3">')
+      .replace(/\n/g, '<br>')
+  }
+
+  const getConnectionIcon = (connectionFound: boolean) => {
+    return connectionFound ? (
+      <CheckCircle2 className="h-4 w-4 text-green-500" />
+    ) : (
+      <AlertCircle className="h-4 w-4 text-amber-500" />
+    )
+  }
+
+  const getErrorIcon = (errorType: string) => {
+    switch (errorType) {
+      case 'RATE_LIMITED':
+        return <Clock className="h-4 w-4 text-amber-500" />
+      case 'TIMEOUT':
+        return <Clock className="h-4 w-4 text-red-500" />
+      default:
+        return <AlertCircle className="h-4 w-4 text-red-500" />
+    }
+  }
+
+  const getErrorMessage = (error: APIErrorResponse) => {
+    switch (error.error) {
+      case 'RATE_LIMITED':
+        return {
+          title: 'Rate Limit Exceeded',
+          description: error.retryAfter 
+            ? `Please wait ${error.retryAfter} seconds before trying again.`
+            : 'Too many requests. Please wait a moment before trying again.',
+          canRetry: true
+        }
+      case 'INVALID_INPUT':
+        return {
+          title: 'Invalid Hypothesis',
+          description: error.message,
+          canRetry: true
+        }
+      case 'CLAUDE_API_ERROR':
+        return {
+          title: 'Analysis Service Unavailable',
+          description: 'The AI analysis service is temporarily unavailable. Please try again later.',
+          canRetry: true
+        }
+      case 'TIMEOUT':
+        return {
+          title: 'Request Timeout',
+          description: 'The analysis took too long to complete. Try a shorter hypothesis.',
+          canRetry: true
+        }
+      case 'SERVICE_UNAVAILABLE':
+        return {
+          title: 'Service Unavailable',
+          description: 'The service is currently under maintenance. Please try again later.',
+          canRetry: false
+        }
+      default:
+        return {
+          title: 'Analysis Failed',
+          description: error.message || 'An unexpected error occurred. Please try again.',
+          canRetry: true
+        }
+    }
+  }
+
+  const renderInputState = () => (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="hypothesis">What's your Hypothesis?</Label>
+        <Textarea
+          id="hypothesis"
+          placeholder="Enter your hypothesis about the data... (e.g., 'Students prefer interactive teaching methods over traditional lectures')"
+          value={hypothesis}
+          onChange={(e) => setHypothesis(e.target.value)}
+          className="mt-2"
+          rows={4}
+          maxLength={1000}
+        />
+        <div className="flex justify-between items-center mt-1">
+          <p className="text-xs text-muted-foreground">
+            {hypothesis.length}/1000 characters
+          </p>
+          {hypothesis.trim().length < 10 && hypothesis.length > 0 && (
+            <p className="text-xs text-amber-600">
+              Minimum 10 characters required
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleSubmit}
+          disabled={!hypothesis.trim() || hypothesis.trim().length < 10 || isSubmitting}
+        >
+          Ask the Data
+        </Button>
+      </div>
+    </div>
+  )
+
+  const renderProcessingState = () => (
+    <div className="flex flex-col items-center justify-center py-8 space-y-6">
+      <div className="relative">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+      </div>
+      
+      <div className="text-center space-y-2">
+        <p className="font-medium text-foreground">{processingProgress.step}</p>
+        <p className="text-sm text-muted-foreground">
+          Analyzing your hypothesis against course feedback data...
+        </p>
+      </div>
+      
+      <div className="w-full max-w-sm space-y-2">
+        <Progress value={processingProgress.progress} className="h-2" />
+        <p className="text-xs text-muted-foreground text-center">
+          {processingProgress.progress}% complete
+        </p>
+      </div>
+      
+      <p className="text-xs text-muted-foreground text-center max-w-md">
+        This usually takes 10-30 seconds depending on the complexity of your hypothesis.
+      </p>
+    </div>
+  )
+
+  const renderResultsState = () => {
+    if (!results) return null
+    
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50">
+          {getConnectionIcon(results.connectionFound)}
+          <div className="flex-1">
+            <h4 className="text-sm font-medium mb-1">
+              {results.connectionFound ? 'Connection Found' : 'No Connection Found'}
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Analysis completed in {results.processingTime}ms
+              {results.cached && ' (from cache)'}
+            </p>
+          </div>
+        </div>
+        
+        <div className="max-h-[50vh] overflow-y-auto">
+          <div className="prose prose-sm max-w-none">
+            <div 
+              className="text-sm leading-relaxed"
+              dangerouslySetInnerHTML={{ 
+                __html: `<p>${formatMarkdown(results.result)}</p>`
+              }}
+            />
+          </div>
+        </div>
+        
+        <div className="flex justify-between items-center pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={() => setDialogState('input')}>
+            Ask Another Question
+          </Button>
+          <Button onClick={handleClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const renderErrorState = () => {
+    if (!error) return null
+    
+    const errorInfo = getErrorMessage(error)
+    
+    return (
+      <div className="space-y-4">
+        <Alert variant="destructive">
+          <div className="flex items-start gap-2">
+            {getErrorIcon(error.error)}
+            <div className="flex-1">
+              <h4 className="font-medium">{errorInfo.title}</h4>
+              <AlertDescription className="mt-1">
+                {errorInfo.description}
+              </AlertDescription>
+            </div>
+          </div>
+        </Alert>
+        
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={handleClose}>
+            Close
+          </Button>
+          {errorInfo.canRetry && (
+            <Button onClick={handleRetry} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Try Again
+            </Button>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const getDialogTitle = () => {
+    switch (dialogState) {
+      case 'input':
+        return "Ask the Data"
+      case 'processing':
+        return "Processing Hypothesis"
+      case 'results':
+        return results?.connectionFound ? "Connection Found" : "Analysis Complete"
+      case 'error':
+        return error ? getErrorMessage(error).title : "Error"
+      default:
+        return "Ask the Data"
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className={`sm:max-w-lg ${dialogState === 'results' ? 'sm:max-w-2xl' : ''}`}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {dialogState === 'results' && results && getConnectionIcon(results.connectionFound)}
+            {dialogState === 'error' && error && getErrorIcon(error.error)}
+            {getDialogTitle()}
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="py-4">
+          {dialogState === 'input' && renderInputState()}
+          {dialogState === 'processing' && renderProcessingState()}
+          {dialogState === 'results' && renderResultsState()}
+          {dialogState === 'error' && renderErrorState()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

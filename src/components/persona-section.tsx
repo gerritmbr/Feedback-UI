@@ -26,6 +26,8 @@ import { PersonaDataProvider, usePersonaData } from "@/src/components/persona-da
 import { PersonaNetworkSection } from "./PersonaNetworkSection";
 import { MatchButton } from "@/src/components/match-button";
 import { MatchPopup } from "@/src/components/match-popup";
+import { AskDataButton } from "@/src/components/ask-data-button";
+import { AskDataDialog } from "@/src/components/ask-data-dialog";
 import { usePersonaNetworkData } from "./network/hooks/usePersonaNetworkData";
 
 // Action-based selection callback type
@@ -67,6 +69,7 @@ type ErrorState = {
  */
 function PersonaSectionContent() {
   const [isMatchPopupOpen, setIsMatchPopupOpen] = useState(false);
+  const [isAskDataDialogOpen, setIsAskDataDialogOpen] = useState(false);
   const [matchData, setMatchData] = useState<Match[]>([]);
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   
@@ -266,6 +269,14 @@ function PersonaSectionContent() {
     setIsMatchPopupOpen(false);
   }, []);
 
+  const handleAskDataClick = useCallback((): void => {
+    setIsAskDataDialogOpen(true);
+  }, []);
+
+  const handleCloseAskDataDialog = useCallback((): void => {
+    setIsAskDataDialogOpen(false);
+  }, []);
+
   const handleDownload = () => {
     // Download the filtered data if available, otherwise the original JSON
     if (filteredMatchData.length > 0 && selectedNodeIds.size > 0) {
@@ -299,7 +310,10 @@ function PersonaSectionContent() {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle>Personas</CardTitle>
-          <MatchButton onClick={handleFindMatches} />
+          <div className="flex items-center gap-2">
+            <AskDataButton onClick={handleAskDataClick} />
+            <MatchButton onClick={handleFindMatches} />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 p-2 overflow-hidden">
@@ -340,6 +354,11 @@ function PersonaSectionContent() {
         onClose={handleClosePopup}
         onDownload={handleDownload}
         data={filteredMatchData}
+      />
+
+      <AskDataDialog
+        isOpen={isAskDataDialogOpen}
+        onClose={handleCloseAskDataDialog}
       />
     </Card>
   );
