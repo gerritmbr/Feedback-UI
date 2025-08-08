@@ -16,6 +16,7 @@ import {
 import { Loader2, AlertCircle, CheckCircle2, RefreshCw, Clock, ChevronDown } from "lucide-react"
 import { usePersonaData } from "@/src/components/persona-data-context"
 import { usePersonaNetworkData } from "@/src/components/network/hooks/usePersonaNetworkData"
+import { useTranscriptActions, useTranscriptState } from '@/src/components/transcript-data-context'
 
 // Types for API responses
 interface HypothesisTestResponse {
@@ -24,7 +25,8 @@ interface HypothesisTestResponse {
   processingTime: number
   cached: boolean
   transcriptsAnalyzed?: number  // NEW: transparency for user
-  personasUsed?: number        // NEW: filtering context
+  personasUsed?: string[]       // NEW: filtering context (array of persona IDs)
+  dataSource?: 'uploaded' | 'local' | 'example'  // NEW: data source transparency
 }
 
 interface APIErrorResponse {
@@ -189,6 +191,9 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
     return () => clearInterval(interval)
   }, [])
 
+  const transcriptState = useTranscriptState()
+  const { getDataForAPI } = useTranscriptActions()
+
   const handleSubmit = async () => {
     if (!hypothesis.trim() || isSubmitting) return
     
@@ -202,10 +207,15 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
       personaNetworkData?.nodes.find(n => n.id === nodeId && n.type === 'persona')
     )
     
+    // Get transcript session ID for API
+    const transcriptSessionId = getDataForAPI()
+    
     console.log('🎭 AskDataDialog: Sending hypothesis with persona filtering', {
       hypothesis: hypothesis.trim(),
       selectedPersonaIds,
-      totalPersonasAvailable: personaNetworkData?.nodes.filter(n => n.type === 'persona').length || 0
+      totalPersonasAvailable: personaNetworkData?.nodes.filter(n => n.type === 'persona').length || 0,
+      transcriptDataSource: transcriptState.metadata.source,
+      hasTranscriptSession: !!transcriptSessionId
     })
     
     // Start progress simulation
@@ -219,7 +229,8 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
         },
         body: JSON.stringify({ 
           hypothesis: hypothesis.trim(),
-          selectedPersonaIds: selectedPersonaIds.length > 0 ? selectedPersonaIds : undefined
+          selectedPersonaIds: selectedPersonaIds.length > 0 ? selectedPersonaIds : undefined,
+          transcriptSessionId: transcriptSessionId
         })
       })
 
@@ -448,10 +459,22 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
         </div>
         
         {/* NEW: Filtering context */}
-        {(results.transcriptsAnalyzed !== undefined || results.personasUsed !== undefined) && (
-          <div className="text-xs text-muted-foreground border-t pt-2">
-            Analysis based on {results.transcriptsAnalyzed || 'all'} transcript(s)
-            {(results.personasUsed && results.personasUsed.length > 0) && ` from ${results.personasUsed.length} selected persona(s)`}
+        {(results.transcriptsAnalyzed !== undefined || results.personasUsed !== undefined || results.dataSource) && (
+          <div className="text-xs text-muted-foreground border-t pt-2 space-y-1">
+            <div>
+              Analysis based on {results.transcriptsAnalyzed || 'all'} transcript(s)
+              {(results.personasUsed && results.personasUsed.length > 0) && ` from ${results.personasUsed.length} selected persona(s)`}
+            </div>
+            {results.dataSource && (
+              <div className="flex items-center gap-1">
+                <span>Data source:</span>
+                <Badge variant="outline" className="text-xs px-1 py-0">
+                  {results.dataSource === 'uploaded' && '📤 Uploaded'}
+                  {results.dataSource === 'local' && '💻 Local File'}
+                  {results.dataSource === 'example' && '📋 Example Data'}
+                </Badge>
+              </div>
+            )}
           </div>
         )}
         

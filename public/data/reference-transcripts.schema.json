@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reference Transcripts Schema",
+  "description": "JSON schema for validating interview transcript data",
+  "type": "object",
+  "required": ["transcripts"],
+  "properties": {
+    "transcripts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["id", "content", "language"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20,
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "description": "Unique identifier for the transcript"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 50,
+            "maxLength": 50000,
+            "description": "Full interview transcript content"
+          },
+          "language": {
+            "type": "string",
+            "enum": ["English", "German"],
+            "description": "Language of the interview"
+          },
+          "course": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Course of study (optional)"
+          },
+          "semester": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "Semester number (optional)"
+          },
+          "gender": {
+            "type": "string",
+            "enum": ["male", "female", "other", "prefer-not-to-say"],
+            "description": "Gender of interviewee (optional)"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "lastUpdated": {
+          "type": "string",
+          "format": "date",
+          "description": "Date when transcripts were last updated"
+        },
+        "totalEntries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of transcript entries"
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Version identifier for the dataset"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Description of the transcript dataset"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

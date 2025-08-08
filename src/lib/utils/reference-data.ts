@@ -5,31 +5,80 @@ import fs from 'fs'
 import path from 'path'
 
 /**
- * Load reference transcript data from JSON file
- * This function validates the data structure and provides type safety
+ * Load reference transcript data with fallback hierarchy:
+ * 1. Session-uploaded data (if sessionId provided)
+ * 2. Local file (development/production with local data)
+ * 3. Example data (fallback for demos/testing)
  */
-export async function loadReferenceData(): Promise<TranscriptCollection> {
+export async function loadReferenceData(sessionId?: string): Promise<{
+  data: TranscriptCollection
+  source: 'uploaded' | 'local' | 'example'
+}> {
+  // Import session manager only when needed (server-side)
+  let sessionManager: any = null
   try {
-    // Use fs.readFileSync for server-side API routes
-    const filePath = path.join(process.cwd(), 'public', 'data', 'reference-transcripts.json')
-    const fileContent = fs.readFileSync(filePath, 'utf8')
+    const { getSessionManager } = await import('@/src/lib/services/session-manager')
+    sessionManager = getSessionManager()
+  } catch (error) {
+    // Session manager not available (client-side or missing dependencies)
+  }
+
+  // 1. Try session-uploaded data first
+  if (sessionId && sessionManager) {
+    try {
+      const sessionData = await sessionManager.getSession(sessionId)
+      if (sessionData) {
+        console.log(`Loaded transcript data from session: ${sessionId}`)
+        return { data: sessionData, source: 'uploaded' }
+      }
+    } catch (error) {
+      console.warn('Failed to load session data, falling back:', error)
+    }
+  }
+
+  // 2. Try local file (real data for development/production)
+  try {
+    const localPath = path.join(process.cwd(), 'public', 'data', 'reference-transcripts.json')
+    if (fs.existsSync(localPath)) {
+      const fileContent = fs.readFileSync(localPath, 'utf8')
+      const data = JSON.parse(fileContent) as TranscriptCollection
+      
+      const validation = validateTranscriptData(data)
+      if (!validation.isValid) {
+        console.error('Local transcript data validation failed:', validation.errors)
+      } else {
+        if (validation.warnings.length > 0) {
+          console.warn('Local transcript data warnings:', validation.warnings)
+        }
+        console.log('Loaded transcript data from local file')
+        return { data, source: 'local' }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load local transcript data, falling back:', error)
+  }
+
+  // 3. Fall back to example data
+  try {
+    const examplePath = path.join(process.cwd(), 'public', 'data', 'reference-transcripts.example.json')
+    const fileContent = fs.readFileSync(examplePath, 'utf8')
     const data = JSON.parse(fileContent) as TranscriptCollection
     
-    // Validate the data structure
     const validation = validateTranscriptData(data)
     if (!validation.isValid) {
-      console.error('Reference transcript data validation failed:', validation.errors)
-      throw new Error('Invalid reference transcript data structure')
+      console.error('Example transcript data validation failed:', validation.errors)
+      throw new Error('Invalid example transcript data structure')
     }
     
     if (validation.warnings.length > 0) {
-      console.warn('Reference transcript data warnings:', validation.warnings)
+      console.warn('Example transcript data warnings:', validation.warnings)
     }
     
-    return data
+    console.log('Loaded transcript data from example file (fallback)')
+    return { data, source: 'example' }
   } catch (error) {
-    console.error('Error loading reference transcript data:', error)
-    throw new Error('Failed to load reference transcript data')
+    console.error('Failed to load example transcript data:', error)
+    throw new Error('Failed to load any transcript data - all sources unavailable')
   }
 }
 

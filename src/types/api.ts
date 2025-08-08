@@ -12,6 +12,7 @@ export type APIErrorType =
 export interface HypothesisTestRequest {
   hypothesis: string         // 10-1000 characters, sanitized
   selectedPersonaIds?: string[]  // Optional array of persona IDs for transcript filtering
+  transcriptSessionId?: string   // Optional session ID for uploaded transcript data
 }
 
 // Response interfaces
@@ -22,6 +23,7 @@ export interface HypothesisTestResponse {
   cached: boolean          // Whether result came from cache
   transcriptsAnalyzed: number   // Number of transcripts analyzed
   personasUsed?: string[]   // Persona IDs used for filtering (if any)
+  dataSource?: 'uploaded' | 'local' | 'example'  // Source of transcript data
 }
 
 export interface APIErrorResponse {

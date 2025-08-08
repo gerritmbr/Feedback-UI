@@ -13,6 +13,7 @@ import { SuccessBanner } from "@/src/components/success-banner"
 import { useReportData } from "@/src/components/report-data-context"
 import { usePersonaTranscriptFilter } from "@/src/hooks/usePersonaTranscriptFilter"
 import { PersonaNetworkData, usePersonaData, PersonaDataProvider } from "@/src/components/persona-data-context"
+import { TranscriptProvider } from "@/src/components/transcript-data-context"
 
 function DashboardContent() {
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>(["1", "2", "3", "4"])
@@ -95,12 +96,14 @@ function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <PersonaDataProvider>
-      <FeedbackDataProvider>
-        <ReportDataProvider>
-          <DashboardContent />
-        </ReportDataProvider>
-      </FeedbackDataProvider>
-    </PersonaDataProvider>
+    <TranscriptProvider>
+      <PersonaDataProvider>
+        <FeedbackDataProvider>
+          <ReportDataProvider>
+            <DashboardContent />
+          </ReportDataProvider>
+        </FeedbackDataProvider>
+      </PersonaDataProvider>
+    </TranscriptProvider>
   );
 }

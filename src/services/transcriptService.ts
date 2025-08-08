@@ -16,14 +16,23 @@ export class TranscriptService {
     if (this.initialized) return
 
     try {
-      const transcriptData = await loadReferenceData()
-      this.loadTranscripts(transcriptData)
+      const result = await loadReferenceData()
+      this.loadTranscripts(result.data)
       this.initialized = true
-      console.log('TranscriptService initialized with', this.transcripts.size, 'transcripts')
+      console.log('TranscriptService initialized with', this.transcripts.size, 'transcripts from', result.source)
     } catch (error) {
       console.error('Failed to initialize TranscriptService:', error)
       throw error
     }
+  }
+
+  /**
+   * Initialize with specific transcript data (for persona filtering)
+   */
+  async initializeWithData(transcriptData: TranscriptCollection) {
+    this.loadTranscripts(transcriptData)
+    this.initialized = true
+    console.log('TranscriptService initialized with provided data:', this.transcripts.size, 'transcripts')
   }
 
   private loadTranscripts(transcriptData: TranscriptCollection) {

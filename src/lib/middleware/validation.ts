@@ -31,6 +31,11 @@ export const HypothesisTestSchema = z.object({
     .array(z.string().min(1, 'Persona ID cannot be empty'))
     .min(0, 'Selected persona IDs must be an array')
     .max(50, 'Too many persona IDs selected (maximum 50)')
+    .optional(),
+  transcriptSessionId: z
+    .string()
+    .min(1, 'Transcript session ID cannot be empty')
+    .regex(/^ts_[a-f0-9]{32}$/, 'Invalid transcript session ID format')
     .optional()
 })
 
@@ -77,7 +82,8 @@ export async function validateHypothesisRequest(
 
     return {
       hypothesis: sanitizedHypothesis,
-      selectedPersonaIds: validatedData.selectedPersonaIds
+      selectedPersonaIds: validatedData.selectedPersonaIds,
+      transcriptSessionId: validatedData.transcriptSessionId
     }
 
   } catch (error) {

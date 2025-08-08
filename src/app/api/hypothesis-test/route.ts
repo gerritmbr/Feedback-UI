@@ -53,19 +53,22 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   // Step 3: Input validation
   const validatedRequest = await validateHypothesisRequest(request)
-  const { hypothesis, selectedPersonaIds } = validatedRequest
+  const { hypothesis, selectedPersonaIds, transcriptSessionId } = validatedRequest
 
   logRequest(requestId, 'request_validated', { 
     hypothesisLength: hypothesis.length,
     userIP,
     securityScore: securityAudit.securityScore,
-    personaFiltering: selectedPersonaIds && selectedPersonaIds.length > 0
+    personaFiltering: selectedPersonaIds && selectedPersonaIds.length > 0,
+    hasTranscriptSession: !!transcriptSessionId
   })
 
-  // Step 4: Cache check (include persona filtering in cache key)
+  // Step 4: Cache check (include persona filtering and transcript source in cache key)
   const cacheService = getCacheService()
   const cacheKey = createCacheKey(
-    hypothesis + (selectedPersonaIds ? `|personas:${selectedPersonaIds.sort().join(',')}` : '')
+    hypothesis + 
+    (selectedPersonaIds ? `|personas:${selectedPersonaIds.sort().join(',')}` : '') +
+    (transcriptSessionId ? `|session:${transcriptSessionId}` : '|default')
   )
   const cachedResult = cacheService.get(cacheKey)
   
@@ -78,7 +81,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
       processingTime: Date.now() - startTime,
       cached: true,
       transcriptsAnalyzed: 0, // Cached result, exact count not tracked
-      personasUsed: selectedPersonaIds
+      personasUsed: selectedPersonaIds,
+      dataSource: undefined // Unknown for cached results
     }
     
     return createSecureResponse(response, {
@@ -94,12 +98,19 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   // Step 5: Load and filter reference data based on persona selection
   let transcriptsToAnalyze
   let personasUsed: string[] = []
+  let dataSource: 'uploaded' | 'local' | 'example' = 'example'
   
   try {
     if (selectedPersonaIds && selectedPersonaIds.length > 0) {
-      // Persona filtering enabled
+      // Persona filtering enabled - need to load data first to get transcripts
+      const referenceResult = await loadReferenceData(transcriptSessionId)
+      dataSource = referenceResult.source
+      
       const personaService = getPersonaService()
       const transcriptService = getTranscriptService()
+      
+      // Initialize transcript service with the loaded data
+      await transcriptService.initializeWithData(referenceResult.data)
       
       // Resolve persona IDs to transcript IDs (with 4-transcript business rule)
       const resolvedTranscriptIds = await personaService.resolveTranscriptIds(selectedPersonaIds)
@@ -109,17 +120,20 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
       personasUsed = selectedPersonaIds
       
       logRequest(requestId, 'persona_filtering_applied', {
+        dataSource,
         selectedPersonas: selectedPersonaIds.length,
         resolvedTranscriptIds: resolvedTranscriptIds.length,
         transcriptsFound: transcriptsToAnalyze.length
       })
     } else {
-      // No persona filtering - load all reference data but limit to 4 transcripts
-      const referenceData = await loadReferenceData()
-      transcriptsToAnalyze = referenceData.transcripts.slice(0, 4) // Apply same 4-transcript limit
+      // No persona filtering - load reference data with fallback system
+      const referenceResult = await loadReferenceData(transcriptSessionId)
+      dataSource = referenceResult.source
+      transcriptsToAnalyze = referenceResult.data.transcripts.slice(0, 4) // Apply same 4-transcript limit
       
       logRequest(requestId, 'no_persona_filtering', {
-        totalTranscripts: referenceData.transcripts.length,
+        dataSource: referenceResult.source,
+        totalTranscripts: referenceResult.data.transcripts.length,
         limitedTo: transcriptsToAnalyze.length
       })
     }
@@ -188,7 +202,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     processingTime: totalProcessingTime,
     cached: false,
     transcriptsAnalyzed: transcriptsToAnalyze.length,
-    personasUsed: personasUsed.length > 0 ? personasUsed : undefined
+    personasUsed: personasUsed.length > 0 ? personasUsed : undefined,
+    dataSource: dataSource
   }
 
   logRequest(requestId, 'request_completed', {
