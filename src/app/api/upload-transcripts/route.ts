@@ -281,17 +281,33 @@ function logUploadEvent(
   metadata: Record<string, any> = {}
 ): void {
   const logLevel = process.env.LOG_LEVEL || 'info'
+  const isProduction = process.env.NODE_ENV === 'production'
+  const isServerless = process.env.VERCEL || process.env.NETLIFY
   
-  if (process.env.NODE_ENV === 'development' || logLevel === 'debug') {
+  // Always log errors and important events in production/serverless environments
+  const shouldLog = process.env.NODE_ENV === 'development' || 
+                   logLevel === 'debug' || 
+                   isProduction || 
+                   isServerless ||
+                   event.includes('error') || 
+                   event.includes('failed')
+  
+  if (shouldLog) {
     const logEntry = {
       timestamp: new Date().toISOString(),
       requestId,
       event,
       metadata: sanitizeLogMetadata(metadata),
-      service: 'transcript-upload-api'
+      service: 'transcript-upload-api',
+      environment: process.env.NODE_ENV,
+      isServerless: !!isServerless
     }
 
-    console.log(`[Upload API] ${JSON.stringify(logEntry)}`)
+    if (event.includes('error') || event.includes('failed')) {
+      console.error(`[Upload API ERROR] ${JSON.stringify(logEntry)}`)
+    } else {
+      console.log(`[Upload API] ${JSON.stringify(logEntry)}`)
+    }
   }
 }
 

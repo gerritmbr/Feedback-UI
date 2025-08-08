@@ -1,5 +1,6 @@
 // Session management for uploaded transcript data
-// Uses file-based storage for better reliability across server restarts
+// Uses memory-based storage for serverless environments (Vercel)
+// Falls back to file-based storage for local development
 
 import * as fs from 'fs'
 import * as path from 'path'
@@ -23,19 +24,46 @@ export interface SessionData {
 class SessionManager {
   private readonly sessionDir: string
   private readonly sessionTTL: number = 4 * 60 * 60 * 1000 // 4 hours
+  private readonly isServerless: boolean
+  
+  // Memory storage for serverless environments
+  private memoryStore = new Map<string, SessionData>()
+  private cleanupInterval: NodeJS.Timeout | null = null
   
   constructor() {
-    // Use temp directory for session storage
-    this.sessionDir = path.join(process.cwd(), 'temp', 'transcript-sessions')
-    this.ensureSessionDirectory()
+    // Detect serverless environment (Vercel, Netlify, etc.)
+    this.isServerless = !!(process.env.VERCEL || process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME)
     
-    // Clean up expired sessions on startup
-    this.cleanupExpiredSessions()
+    if (this.isServerless) {
+      console.log('SessionManager: Using memory storage for serverless environment')
+      this.initializeMemoryStorage()
+    } else {
+      console.log('SessionManager: Using file storage for local development')
+      // Use temp directory for session storage
+      this.sessionDir = path.join(process.cwd(), 'temp', 'transcript-sessions')
+      this.ensureSessionDirectory()
+      // Clean up expired sessions on startup
+      this.cleanupExpiredSessions()
+    }
+  }
+
+  private initializeMemoryStorage(): void {
+    // Set up periodic cleanup for memory storage
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredMemorySessions()
+    }, 15 * 60 * 1000) // Cleanup every 15 minutes
   }
 
   private ensureSessionDirectory(): void {
-    if (!fs.existsSync(this.sessionDir)) {
-      fs.mkdirSync(this.sessionDir, { recursive: true })
+    try {
+      if (!fs.existsSync(this.sessionDir)) {
+        fs.mkdirSync(this.sessionDir, { recursive: true })
+        console.log(`Created session directory: ${this.sessionDir}`)
+      }
+    } catch (error) {
+      console.error('Failed to create session directory:', error)
+      console.error('This may indicate a filesystem permission issue in serverless environment')
+      throw new Error(`Cannot create session directory: ${error}`)
     }
   }
 
@@ -60,6 +88,25 @@ class SessionManager {
       transcripts
     }
 
+    if (this.isServerless) {
+      return this.createMemorySession(sessionId, sessionData)
+    } else {
+      return this.createFileSession(sessionId, sessionData)
+    }
+  }
+
+  private async createMemorySession(sessionId: string, sessionData: SessionData): Promise<string> {
+    try {
+      this.memoryStore.set(sessionId, sessionData)
+      console.log(`Memory session created: ${sessionId}, transcripts: ${sessionData.metadata.transcriptCount}, size: ${sessionData.metadata.fileSize} bytes`)
+      return sessionId
+    } catch (error) {
+      console.error('Failed to create memory session:', error)
+      throw new Error('Failed to store transcript data in memory')
+    }
+  }
+
+  private async createFileSession(sessionId: string, sessionData: SessionData): Promise<string> {
     const sessionPath = this.getSessionPath(sessionId)
     
     try {
@@ -69,11 +116,11 @@ class SessionManager {
         'utf8'
       )
       
-      console.log(`Session created: ${sessionId}, transcripts: ${metadata.transcriptCount}, size: ${metadata.fileSize} bytes`)
+      console.log(`File session created: ${sessionId}, transcripts: ${sessionData.metadata.transcriptCount}, size: ${sessionData.metadata.fileSize} bytes`)
       return sessionId
     } catch (error) {
-      console.error('Failed to create session:', error)
-      throw new Error('Failed to store transcript data')
+      console.error('Failed to create file session:', error)
+      throw new Error('Failed to store transcript data to file')
     }
   }
 
@@ -85,6 +132,35 @@ class SessionManager {
       return null
     }
 
+    if (this.isServerless) {
+      return this.getMemorySession(sessionId)
+    } else {
+      return this.getFileSession(sessionId)
+    }
+  }
+
+  private async getMemorySession(sessionId: string): Promise<TranscriptCollection | null> {
+    try {
+      const sessionData = this.memoryStore.get(sessionId)
+      
+      if (!sessionData) {
+        return null
+      }
+
+      // Check if session is expired
+      if (Date.now() > sessionData.metadata.expiresAt) {
+        this.memoryStore.delete(sessionId)
+        return null
+      }
+
+      return sessionData.transcripts
+    } catch (error) {
+      console.error(`Failed to read memory session ${sessionId}:`, error)
+      return null
+    }
+  }
+
+  private async getFileSession(sessionId: string): Promise<TranscriptCollection | null> {
     const sessionPath = this.getSessionPath(sessionId)
     
     try {
@@ -103,7 +179,7 @@ class SessionManager {
 
       return sessionData.transcripts
     } catch (error) {
-      console.error(`Failed to read session ${sessionId}:`, error)
+      console.error(`Failed to read file session ${sessionId}:`, error)
       return null
     }
   }
@@ -116,6 +192,35 @@ class SessionManager {
       return null
     }
 
+    if (this.isServerless) {
+      return this.getMemorySessionMetadata(sessionId)
+    } else {
+      return this.getFileSessionMetadata(sessionId)
+    }
+  }
+
+  private async getMemorySessionMetadata(sessionId: string): Promise<SessionMetadata | null> {
+    try {
+      const sessionData = this.memoryStore.get(sessionId)
+      
+      if (!sessionData) {
+        return null
+      }
+
+      // Check if session is expired
+      if (Date.now() > sessionData.metadata.expiresAt) {
+        this.memoryStore.delete(sessionId)
+        return null
+      }
+
+      return sessionData.metadata
+    } catch (error) {
+      console.error(`Failed to read memory session metadata ${sessionId}:`, error)
+      return null
+    }
+  }
+
+  private async getFileSessionMetadata(sessionId: string): Promise<SessionMetadata | null> {
     const sessionPath = this.getSessionPath(sessionId)
     
     try {
@@ -134,7 +239,7 @@ class SessionManager {
 
       return sessionData.metadata
     } catch (error) {
-      console.error(`Failed to read session metadata ${sessionId}:`, error)
+      console.error(`Failed to read file session metadata ${sessionId}:`, error)
       return null
     }
   }
@@ -155,15 +260,34 @@ class SessionManager {
       return
     }
 
+    if (this.isServerless) {
+      this.deleteMemorySession(sessionId)
+    } else {
+      this.deleteFileSession(sessionId)
+    }
+  }
+
+  private deleteMemorySession(sessionId: string): void {
+    try {
+      if (this.memoryStore.has(sessionId)) {
+        this.memoryStore.delete(sessionId)
+        console.log(`Memory session deleted: ${sessionId}`)
+      }
+    } catch (error) {
+      console.error(`Failed to delete memory session ${sessionId}:`, error)
+    }
+  }
+
+  private async deleteFileSession(sessionId: string): Promise<void> {
     const sessionPath = this.getSessionPath(sessionId)
     
     try {
       if (fs.existsSync(sessionPath)) {
         await fs.promises.unlink(sessionPath)
-        console.log(`Session deleted: ${sessionId}`)
+        console.log(`File session deleted: ${sessionId}`)
       }
     } catch (error) {
-      console.error(`Failed to delete session ${sessionId}:`, error)
+      console.error(`Failed to delete file session ${sessionId}:`, error)
     }
   }
 
@@ -171,6 +295,37 @@ class SessionManager {
    * Clean up all expired sessions
    */
   async cleanupExpiredSessions(): Promise<number> {
+    if (this.isServerless) {
+      return this.cleanupExpiredMemorySessions()
+    } else {
+      return this.cleanupExpiredFileSessions()
+    }
+  }
+
+  private cleanupExpiredMemorySessions(): number {
+    let cleanedCount = 0
+    const now = Date.now()
+
+    try {
+      for (const [sessionId, sessionData] of this.memoryStore.entries()) {
+        if (now > sessionData.metadata.expiresAt) {
+          this.memoryStore.delete(sessionId)
+          cleanedCount++
+        }
+      }
+
+      if (cleanedCount > 0) {
+        console.log(`Cleaned up ${cleanedCount} expired memory sessions`)
+      }
+
+      return cleanedCount
+    } catch (error) {
+      console.error('Failed to cleanup expired memory sessions:', error)
+      return 0
+    }
+  }
+
+  private async cleanupExpiredFileSessions(): Promise<number> {
     try {
       if (!fs.existsSync(this.sessionDir)) {
         return 0
@@ -204,12 +359,12 @@ class SessionManager {
       }
 
       if (cleanedCount > 0) {
-        console.log(`Cleaned up ${cleanedCount} expired sessions`)
+        console.log(`Cleaned up ${cleanedCount} expired file sessions`)
       }
 
       return cleanedCount
     } catch (error) {
-      console.error('Failed to cleanup expired sessions:', error)
+      console.error('Failed to cleanup expired file sessions:', error)
       return 0
     }
   }
@@ -218,6 +373,52 @@ class SessionManager {
    * Get statistics about active sessions
    */
   async getSessionStats(): Promise<{
+    totalSessions: number
+    totalSize: number
+    oldestSession: number | null
+  }> {
+    if (this.isServerless) {
+      return this.getMemorySessionStats()
+    } else {
+      return this.getFileSessionStats()
+    }
+  }
+
+  private getMemorySessionStats(): {
+    totalSessions: number
+    totalSize: number
+    oldestSession: number | null
+  } {
+    try {
+      let totalSize = 0
+      let oldestSession: number | null = null
+      let validSessions = 0
+      const now = Date.now()
+
+      for (const [sessionId, sessionData] of this.memoryStore.entries()) {
+        // Only count non-expired sessions
+        if (now <= sessionData.metadata.expiresAt) {
+          validSessions++
+          totalSize += sessionData.metadata.fileSize
+          
+          if (oldestSession === null || sessionData.metadata.uploadedAt < oldestSession) {
+            oldestSession = sessionData.metadata.uploadedAt
+          }
+        }
+      }
+
+      return {
+        totalSessions: validSessions,
+        totalSize,
+        oldestSession
+      }
+    } catch (error) {
+      console.error('Failed to get memory session stats:', error)
+      return { totalSessions: 0, totalSize: 0, oldestSession: null }
+    }
+  }
+
+  private async getFileSessionStats(): Promise<{
     totalSessions: number
     totalSize: number
     oldestSession: number | null
@@ -262,7 +463,7 @@ class SessionManager {
         oldestSession
       }
     } catch (error) {
-      console.error('Failed to get session stats:', error)
+      console.error('Failed to get file session stats:', error)
       return { totalSessions: 0, totalSize: 0, oldestSession: null }
     }
   }
