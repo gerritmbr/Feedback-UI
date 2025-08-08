@@ -26,7 +26,12 @@ export const HypothesisTestSchema = z.object({
     .refine(
       (val) => !/(script|iframe|object|embed|link|meta)/i.test(val),
       'Potentially dangerous content detected'
-    )
+    ),
+  selectedPersonaIds: z
+    .array(z.string().min(1, 'Persona ID cannot be empty'))
+    .min(0, 'Selected persona IDs must be an array')
+    .max(50, 'Too many persona IDs selected (maximum 50)')
+    .optional()
 })
 
 // Content-Type validation
@@ -71,7 +76,8 @@ export async function validateHypothesisRequest(
     const sanitizedHypothesis = sanitizeText(validatedData.hypothesis)
 
     return {
-      hypothesis: sanitizedHypothesis
+      hypothesis: sanitizedHypothesis,
+      selectedPersonaIds: validatedData.selectedPersonaIds
     }
 
   } catch (error) {

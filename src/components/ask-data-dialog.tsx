@@ -23,6 +23,8 @@ interface HypothesisTestResponse {
   connectionFound: boolean
   processingTime: number
   cached: boolean
+  transcriptsAnalyzed?: number  // NEW: transparency for user
+  personasUsed?: number        // NEW: filtering context
 }
 
 interface APIErrorResponse {
@@ -147,6 +149,22 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
   const [error, setError] = useState<APIErrorResponse | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [processingProgress, setProcessingProgress] = useState<ProcessingProgress>({ step: 'Initializing...', progress: 0 })
+  
+  // Access persona context for filtering
+  const { selectedNodeIds, nodesData, edgesData } = usePersonaData()
+  const { processPersonaNetworkData } = usePersonaNetworkData()
+  
+  // Process persona network data
+  const personaNetworkData = useMemo(() => {
+    if (!nodesData.length || !edgesData.length) return null
+    
+    try {
+      return processPersonaNetworkData(nodesData, edgesData)
+    } catch (error) {
+      console.error('Error processing persona network data in dialog:', error)
+      return null
+    }
+  }, [nodesData, edgesData, processPersonaNetworkData])
 
   const simulateProgress = useCallback(() => {
     const steps = [
@@ -179,6 +197,17 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
     setError(null)
     setResults(null)
     
+    // Extract selected persona IDs for server-side filtering
+    const selectedPersonaIds = Array.from(selectedNodeIds).filter(nodeId => 
+      personaNetworkData?.nodes.find(n => n.id === nodeId && n.type === 'persona')
+    )
+    
+    console.log('🎭 AskDataDialog: Sending hypothesis with persona filtering', {
+      hypothesis: hypothesis.trim(),
+      selectedPersonaIds,
+      totalPersonasAvailable: personaNetworkData?.nodes.filter(n => n.type === 'persona').length || 0
+    })
+    
     // Start progress simulation
     const cleanup = simulateProgress()
     
@@ -188,7 +217,10 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ hypothesis: hypothesis.trim() })
+        body: JSON.stringify({ 
+          hypothesis: hypothesis.trim(),
+          selectedPersonaIds: selectedPersonaIds.length > 0 ? selectedPersonaIds : undefined
+        })
       })
 
       const data = await response.json()
@@ -305,59 +337,72 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
     }
   }
 
-  const renderInputState = () => (
-    <div className="space-y-4">
-      {/* Selected Personas Section */}
-      <PersonaDisplaySection />
-      
-      <div>
-        <Label htmlFor="hypothesis">What's your Hypothesis?</Label>
-        <Textarea
-          id="hypothesis"
-          placeholder="Enter your hypothesis about the data... (e.g., 'Students prefer interactive teaching methods over traditional lectures')"
-          value={hypothesis}
-          onChange={(e) => setHypothesis(e.target.value)}
-          className="mt-2"
-          rows={4}
-          maxLength={1000}
-        />
-        <div className="flex justify-between items-center mt-1">
-          <p className="text-xs text-muted-foreground">
-            {hypothesis.length}/1000 characters
-          </p>
-          {hypothesis.trim().length < 10 && hypothesis.length > 0 && (
-            <p className="text-xs text-amber-600">
-              Minimum 10 characters required
+  const renderInputState = () => {
+    return (
+      <div className="space-y-4">
+        {/* Selected Personas Section */}
+        <PersonaDisplaySection />
+        
+        <div>
+          <Label htmlFor="hypothesis">What's your Hypothesis?</Label>
+          <Textarea
+            id="hypothesis"
+            placeholder="Enter your hypothesis about the data... (e.g., 'Students prefer interactive teaching methods over traditional lectures')"
+            value={hypothesis}
+            onChange={(e) => setHypothesis(e.target.value)}
+            className="mt-2"
+            rows={4}
+            maxLength={1000}
+          />
+          <div className="flex justify-between items-center mt-1">
+            <p className="text-xs text-muted-foreground">
+              {hypothesis.length}/1000 characters
+            </p>
+            {hypothesis.trim().length < 10 && hypothesis.length > 0 && (
+              <p className="text-xs text-amber-600">
+                Minimum 10 characters required
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit}
+            disabled={!hypothesis.trim() || hypothesis.trim().length < 10 || isSubmitting}
+          >
+            Ask the Data
+          </Button>
+        </div>
+      </div>
+    )
+  }
+ 
+  const renderProcessingState = () => {
+    const selectedPersonaCount = personaNetworkData?.nodes.filter(n => 
+      selectedNodeIds.has(n.id) && n.type === 'persona'
+    ).length || 0
+    
+    return (
+      <div className="flex flex-col items-center justify-center py-8 space-y-6">
+        <div className="relative">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+        </div>
+        
+        <div className="text-center space-y-2">
+          <p className="font-medium text-foreground">{processingProgress.step}</p>
+          {selectedPersonaCount > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Analyzing with {selectedPersonaCount} selected persona context{selectedPersonaCount > 1 ? 's' : ''}...
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Analyzing with full dataset context...
             </p>
           )}
         </div>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
-          Cancel
-        </Button>
-        <Button 
-          onClick={handleSubmit}
-          disabled={!hypothesis.trim() || hypothesis.trim().length < 10 || isSubmitting}
-        >
-          Ask the Data
-        </Button>
-      </div>
-    </div>
-  )
-
-  const renderProcessingState = () => (
-    <div className="flex flex-col items-center justify-center py-8 space-y-6">
-      <div className="relative">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
-      </div>
-      
-      <div className="text-center space-y-2">
-        <p className="font-medium text-foreground">{processingProgress.step}</p>
-        <p className="text-sm text-muted-foreground">
-          Analyzing your hypothesis against course feedback data...
-        </p>
-      </div>
       
       <div className="w-full max-w-sm space-y-2">
         <Progress value={processingProgress.progress} className="h-2" />
@@ -370,7 +415,8 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
         This usually takes 10-30 seconds depending on the complexity of your hypothesis.
       </p>
     </div>
-  )
+    )
+  }
 
   const renderResultsState = () => {
     if (!results) return null
@@ -400,6 +446,14 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
             />
           </div>
         </div>
+        
+        {/* NEW: Filtering context */}
+        {(results.transcriptsAnalyzed !== undefined || results.personasUsed !== undefined) && (
+          <div className="text-xs text-muted-foreground border-t pt-2">
+            Analysis based on {results.transcriptsAnalyzed || 'all'} transcript(s)
+            {(results.personasUsed && results.personasUsed.length > 0) && ` from ${results.personasUsed.length} selected persona(s)`}
+          </div>
+        )}
         
         <div className="flex justify-between items-center pt-2 border-t">
           <Button variant="outline" size="sm" onClick={() => setDialogState('input')}>
@@ -483,3 +537,4 @@ export function AskDataDialog({ isOpen, onClose }: AskDataDialogProps) {
     </Dialog>
   )
 }
+

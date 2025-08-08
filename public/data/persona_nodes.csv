@@ -23,7 +23,7 @@ Id,Label,content,node_type,node_multiplicity,transcript_id
 22,Demonstrates self-directed learning habits,Demonstrates self-directed learning habits,attribute,1,
 23,Re-watches difficult content until understanding clicks,Re-watches difficult content until understanding clicks,attribute,1,
 24,Asks for Zoom access and lecture recordings,Asks for Zoom access and lecture recordings,attribute,1,
-25,The Collaborative Team Player,"Students who genuinely enjoy group projects and class discussions, often mentioning fun and exchange when describing teamwork. They flourish in interactive environments and prefer collaborative problem-solving over one-way lectures, though they dislike when effort isn't matched by others.",persona,1,2|3
+25,The Collaborative Team Player,"Students who genuinely enjoy group projects and class discussions, often mentioning fun and exchange when describing teamwork. They flourish in interactive environments and prefer collaborative problem-solving over one-way lectures, though they dislike when effort isn't matched by others.",persona,1,1
 26,Enjoys group projects and collaborative work,Enjoys group projects and collaborative work,attribute,1,
 27,Values class discussions and peer interaction,Values class discussions and peer interaction,attribute,1,
 28,Finds teamwork fun and engaging,Finds teamwork fun and engaging,attribute,1,
@@ -35,7 +35,7 @@ Id,Label,content,node_type,node_multiplicity,transcript_id
 34,Notices and speaks about free-riders in groups,Notices and speaks about free-riders in groups,attribute,1,
 35,Brings enthusiasm and creativity to team settings,Brings enthusiasm and creativity to team settings,attribute,1,
 36,Values instructor acknowledgment of good teamwork,Values instructor acknowledgment of good teamwork,attribute,1,
-37,The Independent Achiever,"Students who prefer to work solo and often express frustration with group work due to past bad experiences. They are self-reliant, take pride in individual workmanship, and worry about unfair distribution of work and grades in team settings.",persona,1,4|3
+37,The Independent Achiever,"Students who prefer to work solo and often express frustration with group work due to past bad experiences. They are self-reliant, take pride in individual workmanship, and worry about unfair distribution of work and grades in team settings.",persona,1,2
 38,Prefers working alone over team collaboration,Prefers working alone over team collaboration,attribute,1,
 39,Expresses distrust in group work effectiveness,Expresses distrust in group work effectiveness,attribute,1,
 40,Takes pride in individual workmanship and quality,Takes pride in individual workmanship and quality,attribute,1,

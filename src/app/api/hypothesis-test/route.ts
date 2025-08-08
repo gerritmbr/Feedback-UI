@@ -10,6 +10,8 @@ import { getClaudeService } from '@/src/lib/services/claude-service'
 import { getCacheService, createCacheKey } from '@/src/lib/services/cache-service'
 import { loadReferenceData, formatTranscriptsForPrompt } from '@/src/lib/utils/reference-data'
 import { getPromptBuilder } from '@/src/lib/utils/prompt-builder'
+import { getPersonaService } from '@/src/services/personaService'
+import { getTranscriptService } from '@/src/services/transcriptService'
 
 /**
  * POST /api/hypothesis-test - Main hypothesis analysis endpoint
@@ -51,17 +53,20 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   // Step 3: Input validation
   const validatedRequest = await validateHypothesisRequest(request)
-  const { hypothesis } = validatedRequest
+  const { hypothesis, selectedPersonaIds } = validatedRequest
 
   logRequest(requestId, 'request_validated', { 
     hypothesisLength: hypothesis.length,
     userIP,
-    securityScore: securityAudit.securityScore
+    securityScore: securityAudit.securityScore,
+    personaFiltering: selectedPersonaIds && selectedPersonaIds.length > 0
   })
 
-  // Step 4: Cache check
+  // Step 4: Cache check (include persona filtering in cache key)
   const cacheService = getCacheService()
-  const cacheKey = createCacheKey(hypothesis)
+  const cacheKey = createCacheKey(
+    hypothesis + (selectedPersonaIds ? `|personas:${selectedPersonaIds.sort().join(',')}` : '')
+  )
   const cachedResult = cacheService.get(cacheKey)
   
   if (cachedResult) {
@@ -71,7 +76,9 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
       result: cachedResult,
       connectionFound: analyzeConnectionFound(cachedResult),
       processingTime: Date.now() - startTime,
-      cached: true
+      cached: true,
+      transcriptsAnalyzed: 0, // Cached result, exact count not tracked
+      personasUsed: selectedPersonaIds
     }
     
     return createSecureResponse(response, {
@@ -84,24 +91,53 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   logRequest(requestId, 'cache_miss', { cacheKey })
 
-  // Step 5: Load reference data
-  let referenceData
+  // Step 5: Load and filter reference data based on persona selection
+  let transcriptsToAnalyze
+  let personasUsed: string[] = []
+  
   try {
-    referenceData = await loadReferenceData()
+    if (selectedPersonaIds && selectedPersonaIds.length > 0) {
+      // Persona filtering enabled
+      const personaService = getPersonaService()
+      const transcriptService = getTranscriptService()
+      
+      // Resolve persona IDs to transcript IDs (with 4-transcript business rule)
+      const resolvedTranscriptIds = await personaService.resolveTranscriptIds(selectedPersonaIds)
+      
+      // Get filtered transcripts
+      transcriptsToAnalyze = await transcriptService.getTranscriptsByIds(resolvedTranscriptIds)
+      personasUsed = selectedPersonaIds
+      
+      logRequest(requestId, 'persona_filtering_applied', {
+        selectedPersonas: selectedPersonaIds.length,
+        resolvedTranscriptIds: resolvedTranscriptIds.length,
+        transcriptsFound: transcriptsToAnalyze.length
+      })
+    } else {
+      // No persona filtering - load all reference data but limit to 4 transcripts
+      const referenceData = await loadReferenceData()
+      transcriptsToAnalyze = referenceData.transcripts.slice(0, 4) // Apply same 4-transcript limit
+      
+      logRequest(requestId, 'no_persona_filtering', {
+        totalTranscripts: referenceData.transcripts.length,
+        limitedTo: transcriptsToAnalyze.length
+      })
+    }
   } catch (error) {
     logRequest(requestId, 'reference_data_failed', { error: String(error) })
     throw error
   }
 
   logRequest(requestId, 'reference_data_loaded', { 
-    entryCount: referenceData.transcripts.length 
+    entryCount: transcriptsToAnalyze.length,
+    personaFiltered: selectedPersonaIds && selectedPersonaIds.length > 0
   })
 
   // Step 6: Build prompt
   const promptBuilder = getPromptBuilder()
   const analysisContext = {
     hypothesis,
-    referenceData: referenceData.transcripts,
+    referenceData: transcriptsToAnalyze,
     requestId,
     config: {
       maxContextEntries: 4, // Transcripts are longer, use fewer entries
@@ -122,7 +158,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   
   const claudeRequest = {
     hypothesis,
-    referenceContext: formatTranscriptsForPrompt(referenceData.transcripts),
+    referenceContext: formatTranscriptsForPrompt(transcriptsToAnalyze, 10000), // Increased from default 3000 to 10000 chars
     requestId
   }
 
@@ -150,7 +186,9 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     result: analysisResult.result,
     connectionFound: analysisResult.connectionFound,
     processingTime: totalProcessingTime,
-    cached: false
+    cached: false,
+    transcriptsAnalyzed: transcriptsToAnalyze.length,
+    personasUsed: personasUsed.length > 0 ? personasUsed : undefined
   }
 
   logRequest(requestId, 'request_completed', {

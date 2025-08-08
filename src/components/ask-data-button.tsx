@@ -19,5 +19,5 @@ export function AskDataButton({ onClick, isLoading = false, disabled = false }: 
     >
       {isLoading ? "Processing..." : "Ask the Data"}
     </Button>
-  )
-}
+  );
+};
